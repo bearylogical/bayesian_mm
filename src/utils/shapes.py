@@ -18,7 +18,7 @@ class ImageGenerator:
         # TODO: Move this implementation to another method instead of running on initialisation
         if save_dir is None:  # initialise save dir as current date ISO8601 YYYYMMDD format
             temp_dir = Path.cwd() / 'dataset' / strftime("%Y%m%d")
-            temp_dir.mkdir(exist_ok=True)
+            temp_dir.mkdir(parents=True, exist_ok=True)
             self.save_dir = temp_dir
 
         elif save_dir.is_dir():
