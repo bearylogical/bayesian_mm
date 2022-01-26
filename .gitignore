@@ -1,0 +1,5 @@
+/dataset/
+/notebooks/.ipynb_checkpoints/
+/tests/.pytest_cache/
+/.vscode/
+/.pytest_cache/
