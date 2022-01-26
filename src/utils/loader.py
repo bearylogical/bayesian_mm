@@ -5,7 +5,7 @@ from constants import ACCEPTABLE_IMAGE_FORMATS, \
     ACCEPTABLE_SEGMENTATION_FORMATS
 import numpy as np
 from tensorflow.keras.preprocessing.image import load_img
-
+from typing import List, Tuple
 # Code modified from Image Segmentation Keras library
 # Divam Gupta, Rounaq Wala , Marius Juston, JaledMC
 # https://github.com/divamgupta/image-segmentation-keras
@@ -48,7 +48,7 @@ class DataLoader(Sequence):
 #     return input_image, input_mask
 
 
-def _get_images_from_dir(image_dir: str, sort=True) -> list[tuple[str, str, str]]:
+def _get_images_from_dir(image_dir: str, sort=True) -> List[Tuple[str, str, str]]:
     image_list = []
 
     for dir_entry in os.listdir(image_dir):
@@ -88,7 +88,7 @@ def _get_img_seg_path(src_dir: str, img_dir_name:str = "images", segment_dir_nam
     return im_path, segment_path
 
 
-def _get_pairs_from_paths(images_path: str, segs_path: str, ignore_non_match: bool = True)-> list[tuple[str, str]]:
+def _get_pairs_from_paths(images_path: str, segs_path: str, ignore_non_match: bool = True)-> List[Tuple[str, str]]:
     """ Find all the images from the images_path directory and
         the segmentation images from the segs_path directory
         while checking integrity of data """

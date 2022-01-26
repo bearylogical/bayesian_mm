@@ -3,7 +3,7 @@ from abc import ABC
 import numpy as np
 from PIL import Image, ImageDraw
 from pathlib import Path
-from typing import Union
+from typing import Union, Tuple
 from time import strftime
 
 
@@ -13,7 +13,7 @@ class ImageGenerator:
     """
 
     def __init__(self, save_dir: Union[None, Path] = None,
-                 dim: tuple[int, int] = (128, 128),
+                 dim: Tuple[int, int] = (128, 128),
                  seed: Union[None, int] = None):
         # TODO: Move this implementation to another method instead of running on initialisation
         if save_dir is None:  # initialise save dir as current date ISO8601 YYYYMMDD format
@@ -64,7 +64,7 @@ class CirclesGenerator(ImageGenerator, ABC):
         self._set_rng()
         self.seed = seed
 
-    def generate(self, save: bool = False) -> tuple[list, list]:
+    def generate(self, save: bool = False) -> Tuple[list, list]:
 
         raw_images_list = []
         mask_images_list = []
@@ -79,7 +79,7 @@ class CirclesGenerator(ImageGenerator, ABC):
 
         return raw_images_list, mask_images_list
 
-    def _generate_image(self) -> tuple[Image.Image, Image.Image]:
+    def _generate_image(self) -> Tuple[Image.Image, Image.Image]:
         bg_img = self._create_image()
         temp_mask = np.zeros((128, 128))
         if self.max_circles == 1:
@@ -99,7 +99,7 @@ class CirclesGenerator(ImageGenerator, ABC):
         mask_img = Image.fromarray(temp_mask)
         return bg_img, mask_img
 
-    def _generate_bounding_coords(self) -> tuple[tuple[int, int], tuple[int, int]]:
+    def _generate_bounding_coords(self) -> Tuple[Tuple[int, int], Tuple[int, int]]:
         """
         Generates the coords for the bounds of the ellipse
         that is to be generated.
@@ -115,7 +115,7 @@ class CirclesGenerator(ImageGenerator, ABC):
         return (x0, y0), (x1, y1)
 
     @staticmethod
-    def _check_aspect_ratio(coords: tuple) -> bool:
+    def _check_aspect_ratio(coords: Tuple) -> bool:
         (x0, y0), (x1, y1) = coords
 
         width = np.abs(x1 - x0)
@@ -137,7 +137,7 @@ class CirclesGenerator(ImageGenerator, ABC):
         self.rng = np.random.default_rng(self.seed)
 
 
-def draw_ellipse_mask(input_image: Image.Image, xy: tuple[tuple[int, int], tuple[int, int]]) -> tuple[Image.Image, np.ndarray]:
+def draw_ellipse_mask(input_image: Image.Image, xy: Tuple[Tuple[int, int], Tuple[int, int]]) -> Tuple[Image.Image, np.ndarray]:
     """
     Function to obtain coordinates of a generated ellipse along with a binary mask of its curvature location.
     :param input_image: Input Image object
