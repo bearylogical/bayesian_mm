@@ -73,9 +73,9 @@ class CirclesGenerator(ImageGenerator, ABC):
 
             if save:
                 self.save_images(raw_img, mask_img, idx)
-            else:
-                raw_images_list.append(raw_img)
-                mask_images_list.append(mask_img)
+
+            raw_images_list.append(raw_img)
+            mask_images_list.append(mask_img)
 
         return raw_images_list, mask_images_list
 

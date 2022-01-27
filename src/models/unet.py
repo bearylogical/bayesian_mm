@@ -1,63 +1,108 @@
+from abc import ABC
+
 from src.models.model import BaseModel
 from tensorflow.keras.layers import Input, Conv2D, MaxPooling2D, concatenate, UpSampling2D, Dropout
 from tensorflow.keras import Model
+from typing import Tuple
 
 
-class UnetModel(BaseModel):
-    def __init__(self, img_size: tuple[int, int], channels: int = 1, num_classes: int = 1):
-        super().__init__(img_size, channels, num_classes)
-        self._get_model()
-
-    def _get_model(self):
-        inputs = Input(shape=self.img_size + (self.num_classes,))
-
+class UnetModel(Model):
+    def __init__(self, img_size: Tuple[int, int], channels: int = 1, num_classes: int = 1):
+        super().__init__()
         # downsampling blocks
-        conv1 = Conv2D(64, 3, activation='relu', padding='same')(inputs)
-        conv1 = Conv2D(64, 3, activation='relu', padding='same')(conv1)
-        pool1 = MaxPooling2D(pool_size=(2, 2))(conv1)
+        self.conv1_1 = Conv2D(64, 3, activation='relu', padding='same')
+        self.conv1_2 = Conv2D(64, 3, activation='relu', padding='same')
+        self.pool1 = MaxPooling2D(pool_size=(2, 2))
 
-        conv2 = Conv2D(128, 3, activation='relu', padding='same')(pool1)
-        conv2 = Conv2D(128, 3, activation='relu', padding='same')(conv2)
-        pool2 = MaxPooling2D(pool_size=(2, 2))(conv2)
+        self.conv2_1 = Conv2D(128, 3, activation='relu', padding='same')
+        self.conv2_2 = Conv2D(128, 3, activation='relu', padding='same')
+        self.pool2 = MaxPooling2D(pool_size=(2, 2))
 
-        conv3 = Conv2D(256, 3, activation='relu', padding='same')(pool2)
-        conv3 = Conv2D(256, 3, activation='relu', padding='same')(conv3)
-        pool3 = MaxPooling2D(pool_size=(2, 2))(conv3)
+        self.conv3_1 = Conv2D(256, 3, activation='relu', padding='same')
+        self.conv3_2 = Conv2D(256, 3, activation='relu', padding='same')
+        self.pool3 = MaxPooling2D(pool_size=(2, 2))
 
-        conv4 = Conv2D(512, 3, activation='relu', padding='same')(pool3)
-        conv4 = Conv2D(512, 3, activation='relu', padding='same')(conv4)
-        drop4 = Dropout(0.5)(conv4)
-        pool4 = MaxPooling2D(pool_size=(2, 2))(drop4)
+        self.conv4_1 = Conv2D(512, 3, activation='relu', padding='same')
+        self.conv4_2 = Conv2D(512, 3, activation='relu', padding='same')
+        self.pool4 = MaxPooling2D(pool_size=(2, 2))
 
-        conv5 = Conv2D(1024, 3, activation='relu', padding='same')(pool4)
-        conv5 = Conv2D(1024, 3, activation='relu', padding='same')(conv5)
-        drop5 = Dropout(0.5)(conv5)
+        self.conv5_1 = Conv2D(1024, 3, activation='relu', padding='same')
+        self.conv5_2 = Conv2D(1024, 3, activation='relu', padding='same')
+        self.drop5 = Dropout(0.5)
 
         # upsampling blocks
-        upconv6 = Conv2D(512, 2, activation='relu', padding='same')(
-            UpSampling2D(size=(2, 2))(drop5))
-        merge6 = concatenate([drop4, upconv6], axis=3)
-        conv6 = Conv2D(512, 3, activation='relu', padding='same')(merge6)
-        conv6 = Conv2D(512, 3, activation='relu', padding='same')(conv6)
+        self.up6 = UpSampling2D(size=(2, 2))
+        self.conv6_1 = Conv2D(512, 2, activation='relu', padding='same')
+        self.conv6_2 = Conv2D(512, 3, activation='relu', padding='same')
+        self.conv6_3 = Conv2D(512, 3, activation='relu', padding='same')
 
-        upconv7 = Conv2D(256, 2, activation='relu', padding='same')(
-            UpSampling2D(size=(2, 2))(conv6))
-        merge7 = concatenate([conv3, upconv7], axis=3)
-        conv7 = Conv2D(256, 3, activation='relu', padding='same')(merge7)
-        conv7 = Conv2D(256, 3, activation='relu', padding='same')(conv7)
+        self.up7 = UpSampling2D(size=(2, 2))
+        self.conv7_1 = Conv2D(256, 2, activation='relu', padding='same')
+        self.conv7_2 = Conv2D(256, 3, activation='relu', padding='same')
+        self.conv7_3 = Conv2D(256, 3, activation='relu', padding='same')
 
-        upconv8 = Conv2D(128, 2, activation='relu', padding='same')(
-            UpSampling2D(size=(2, 2))(conv7))
-        merge8 = concatenate([conv2, upconv8], axis=3)
-        conv8 = Conv2D(128, 3, activation='relu', padding='same')(merge8)
-        conv8 = Conv2D(128, 3, activation='relu', padding='same')(conv8)
+        self.up8 = UpSampling2D(size=(2, 2))
+        self.conv8_1 = Conv2D(128, 2, activation='relu', padding='same')
+        self.conv8_2 = Conv2D(128, 3, activation='relu', padding='same')
+        self.conv8_3 = Conv2D(128, 3, activation='relu', padding='same')
 
-        upconv9 = Conv2D(64, 2, activation='relu', padding='same')(
-            UpSampling2D(size=(2, 2))(conv8))
-        merge9 = concatenate([conv1, upconv9], axis=3)
-        conv9 = Conv2D(64, 3, activation='relu', padding='same')(merge9)
-        conv9 = Conv2D(64, 3, activation='relu', padding='same')(conv9)
-        conv9 = Conv2D(2, 3, activation='relu', padding='same')(conv9)
-        conv10 = Conv2D(1, 1, activation='sigmoid')(conv9)
+        self.up9 = UpSampling2D(size=(2, 2))
+        self.conv9_1 = Conv2D(64, 2, activation='relu', padding='same')
+        self.conv9_2 = Conv2D(64, 3, activation='relu', padding='same')
+        self.conv9_3 = Conv2D(64, 3, activation='relu', padding='same')
+        self.conv9_4 = Conv2D(2, 3, activation='relu', padding='same')
+        self.conv10 = Conv2D(1, 1)
 
-        self.model = Model(inputs, conv10)
+    def call(self, inputs, **kwargs):
+        training = kwargs.get('training', False)
+
+        x1 = self.conv1_1(inputs)
+        x1 = self.conv1_2(x1)
+        p1 = self.pool1(x1)
+
+        x2 = self.conv2_1(p1)
+        x2 = self.conv2_2(x2)
+        p2 = self.pool2(x2)
+
+        x3 = self.conv3_1(p2)
+        x3 = self.conv3_2(x3)
+        p3 = self.pool3(x3)
+
+        x4 = self.conv4_1(p3)
+        x4 = self.conv4_2(x4)
+        p4 = self.pool4(x4)
+
+        x5 = self.conv5_1(p4)
+        x5 = self.conv5_2(x5)
+
+        x6 = self.up6(x5)
+        x6 = self.conv6_1(x6)
+        x6 = concatenate([x4, x6], axis=3)
+        x6 = self.conv6_2(x6)
+        x6 = self.conv6_3(x6)
+
+        x7 = self.up7(x6)
+        x7 = self.conv7_1(x7)
+        x7 = concatenate([x3, x7], axis=3)
+        x7 = self.conv7_2(x7)
+        x7 = self.conv7_3(x7)
+
+        x8 = self.up8(x7)
+        x8 = self.conv8_1(x8)
+        x8 = concatenate([x2, x8], axis=3)
+        x8 = self.conv8_2(x8)
+        x8 = self.conv8_3(x8)
+
+        x9 = self.up9(x8)
+        x9 = self.conv9_1(x9)
+        x9 = concatenate([x1, x9], axis=3)
+        x9 = self.conv9_2(x9)
+        x9 = self.conv9_3(x9)
+        x9 = self.conv9_4(x9)
+
+        return self.conv10(x9)
+
+
+
+
+
