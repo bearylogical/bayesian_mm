@@ -16,11 +16,19 @@ class DataLoaderError(Exception):
 
 
 class DataLoader(Sequence):
-    def __init__(self, batch_size, img_size, input_img_paths, target_img_paths):
+    def __init__(self,
+                 batch_size,
+                 img_size,
+                 input_img_paths,
+                 target_img_paths,
+                 is_rgb = False):
         self.batch_size = batch_size
         self.img_size = img_size
         self.input_img_paths = input_img_paths
         self.target_img_paths = target_img_paths
+        self.channels = 3 if is_rgb else 1
+        self.color_mode = "rgb" if is_rgb else "grayscale"
+        self._is_rgb = is_rgb
 
     def __len__(self):
         return len(self.target_img_paths) // self.batch_size
@@ -30,10 +38,10 @@ class DataLoader(Sequence):
         i = idx * self.batch_size
         batch_input_img_paths = self.input_img_paths[i: i + self.batch_size]
         batch_target_img_paths = self.target_img_paths[i: i + self.batch_size]
-        x = np.zeros((self.batch_size,) + self.img_size + (3,), dtype="float32")
+        x = np.zeros((self.batch_size,) + self.img_size + (self.channels,), dtype="float32")
         for j, path in enumerate(batch_input_img_paths):
-            img = load_img(path, target_size=self.img_size)
-            x[j] = img
+            img = load_img(path, color_mode=self.color_mode, target_size=self.img_size)
+            x[j] = img if self._is_rgb else np.expand_dims(img, 2)
         y = np.zeros((self.batch_size,) + self.img_size + (1,), dtype="uint8")
         for j, path in enumerate(batch_target_img_paths):
             img = load_img(path, target_size=self.img_size, color_mode="grayscale")
