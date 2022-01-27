@@ -1,7 +1,7 @@
 import os
 
 from tensorflow.keras.utils import Sequence
-from constants import ACCEPTABLE_IMAGE_FORMATS, \
+from src.utils.constants import ACCEPTABLE_IMAGE_FORMATS, \
     ACCEPTABLE_SEGMENTATION_FORMATS
 import numpy as np
 from tensorflow.keras.preprocessing.image import load_img
