@@ -148,8 +148,8 @@ def draw_ellipse_mask(input_image: Image.Image, xy: Tuple[Tuple[int, int], Tuple
 
     ImageDraw.Draw(input_image).ellipse(xy, outline=1, fill="black")
     mask_image = np.array(input_image)
-    mask_image[mask_image == 255] = 0
     mask_image[mask_image != 0] = 1
+    mask_image[mask_image == 255] = 0
 
     return input_image, mask_image
 
