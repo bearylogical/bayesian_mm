@@ -7,8 +7,11 @@ from typing import Tuple
 
 
 class UnetModel(Model):
-    def __init__(self, img_size: Tuple[int, int], channels: int = 1, num_classes: int = 1):
+    def __init__(self, img_size: Tuple[int, int],
+                       channels: int = 1,
+                       num_classes: int = 1):
         super().__init__()
+        self.num_classes = num_classes
         # downsampling blocks
         self.conv1_1 = Conv2D(64, 3, activation='relu', padding='same')
         self.conv1_2 = Conv2D(64, 3, activation='relu', padding='same')
@@ -28,7 +31,6 @@ class UnetModel(Model):
 
         self.conv5_1 = Conv2D(1024, 3, activation='relu', padding='same')
         self.conv5_2 = Conv2D(1024, 3, activation='relu', padding='same')
-        self.drop5 = Dropout(0.5)
 
         # upsampling blocks
         self.up6 = UpSampling2D(size=(2, 2))
@@ -51,7 +53,7 @@ class UnetModel(Model):
         self.conv9_2 = Conv2D(64, 3, activation='relu', padding='same')
         self.conv9_3 = Conv2D(64, 3, activation='relu', padding='same')
         self.conv9_4 = Conv2D(2, 3, activation='relu', padding='same')
-        self.conv10 = Conv2D(1, 1)
+        self.conv10 = Conv2D(self.num_classes, 1, activation="sigmoid")
 
     def call(self, inputs, **kwargs):
         training = kwargs.get('training', False)

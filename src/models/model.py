@@ -1,5 +1,4 @@
 from tensorflow.keras import Model, Input
-from tensorflow.keras.layers import Softmax
 from typing import Tuple
 
 class BaseModel(Model):
@@ -15,11 +14,10 @@ class BaseModel(Model):
 if __name__ == "__main__":
     from src.models.unet import UnetModel
     from tensorflow.keras import Input
-    inputs = Input(shape=(128, 128) + (1,))
-    output = Softmax()
-    mdl = UnetModel((128, 128))
-    mdl.build(input_shape=(None, 128, 128) + (1,))
-    mdl.call(inputs)
-    mdl.summary()
 
+    inputs = Input(shape=(128, 128) + (1,))
+    unet = UnetModel((128, 128))
+    unet.build(input_shape=(None, 128, 128) + (1,))
+    unet.call(inputs)
+    unet.summary()
 

@@ -4,8 +4,9 @@ from tensorflow.keras.utils import Sequence
 from src.utils.constants import ACCEPTABLE_IMAGE_FORMATS, \
     ACCEPTABLE_SEGMENTATION_FORMATS
 import numpy as np
-from tensorflow.keras.preprocessing.image import load_img
+from tensorflow.keras.preprocessing.image import load_img, img_to_array
 from typing import List, Tuple
+
 # Code modified from Image Segmentation Keras library
 # Divam Gupta, Rounaq Wala , Marius Juston, JaledMC
 # https://github.com/divamgupta/image-segmentation-keras
@@ -41,6 +42,8 @@ class DataLoader(Sequence):
         x = np.zeros((self.batch_size,) + self.img_size + (self.channels,), dtype="float32")
         for j, path in enumerate(batch_input_img_paths):
             img = load_img(path, color_mode=self.color_mode, target_size=self.img_size)
+            img = img_to_array(img)
+            img = normalize(img) # normalise inputs such that [0,1]
             x[j] = img if self._is_rgb else np.expand_dims(img, 2)
         y = np.zeros((self.batch_size,) + self.img_size + (1,), dtype="uint8")
         for j, path in enumerate(batch_target_img_paths):
@@ -50,10 +53,10 @@ class DataLoader(Sequence):
             # y[j] -= 1
         return x, y
 
-# def normalize(input_image, input_mask):
-#     input_image = tf.cast(input_image, tf.float32) / 255.0
-#     input_mask -= 1
-#     return input_image, input_mask
+
+def normalize(input_image: np.ndarray):
+    input_image = input_image.astype("float32") / 255.0
+    return input_image
 
 
 def _get_images_from_dir(image_dir: str, sort=True) -> List[Tuple[str, str, str]]:
@@ -96,7 +99,7 @@ def _get_img_seg_path(src_dir: str, img_dir_name:str = "images", segment_dir_nam
     return im_path, segment_path
 
 
-def _get_pairs_from_paths(images_path: str, segs_path: str, ignore_non_match: bool = True)-> List[Tuple[str, str]]:
+def get_pairs_from_paths(images_path: str, segs_path: str, ignore_non_match: bool = True)-> Tuple[List,List]:
     """ Find all the images from the images_path directory and
         the segmentation images from the segs_path directory
         while checking integrity of data """
@@ -110,14 +113,16 @@ def _get_pairs_from_paths(images_path: str, segs_path: str, ignore_non_match: bo
     if len(image_files) != len(seg_files):
         raise DataLoaderError(f"Invalid number of image files ({len(image_files)}) vs segment files ({seg_files})")
 
-    fp_pairs = []
+    img_list, seg_list = [], []
     for _img, _seg in zip(image_files, seg_files):
         if _img[0] == _seg[0]:
-            fp_pairs.append((_img[2], _seg[2]))
+            img_list.append(_img[2])
+            seg_list.append(_seg[2])
 
-    return fp_pairs
+    return img_list, seg_list
+
 
 
 if __name__ == "__main__":
     img_path , seg_path = _get_img_seg_path("dataset/20220125")
-    _get_pairs_from_paths(img_path, seg_path)
+    get_pairs_from_paths(img_path, seg_path)

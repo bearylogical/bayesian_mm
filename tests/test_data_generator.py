@@ -1,5 +1,5 @@
 import numpy as np
-from src.utils.shapes import draw_ellipse_mask
+from src.utils.shapes.shapes import draw_ellipse_mask
 from PIL.Image import Image
 
 
@@ -25,6 +25,10 @@ class TestDataGenerator:
     def test_valid_coords(self, mock_circles_generator):
         mock_coords_invalid = (0, 1), (0, 0)
         mock_coords_valid = (0,1), (4, 0)
+        mock_circle_coords = (1,1), (2,2)
 
-        assert not mock_circles_generator._check_aspect_ratio(mock_coords_invalid)
-        assert mock_circles_generator._check_aspect_ratio(mock_coords_valid)
+        assert not mock_circles_generator._check_aspect_ratio(mock_coords_invalid, False)
+        assert mock_circles_generator._check_aspect_ratio(mock_coords_valid, False)
+        assert not mock_circles_generator._check_aspect_ratio(mock_coords_valid, True)
+        assert mock_circles_generator._check_aspect_ratio(mock_circle_coords, True)
+        assert not mock_circles_generator._check_aspect_ratio(mock_circle_coords, False)

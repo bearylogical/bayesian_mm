@@ -1,7 +1,7 @@
 import pytest
 from pathlib import Path
 from PIL import Image
-from src.utils.shapes import CirclesGenerator
+from src.utils.shapes.shapes import CirclesGenerator
 from tempfile import TemporaryDirectory
 
 SEED = 42
