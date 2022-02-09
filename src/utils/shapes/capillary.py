@@ -262,14 +262,15 @@ class CapillaryImageGenerator(ImageGenerator):
         parameter_space = product(available_ref_coord, available_l_band, available_taper_c1_dist)
         selected_params = random.sample(list(parameter_space), self.num_images)
         # initialise our results array : [idx, lband, rband, vol, theta]
-        res = np.empty((0, 5))
+        res = np.zeros((self.num_images),
+                       dtype=[('idx', 'i4'), ('l_band', 'f4'), ('r_band', 'f4'), ('volume', 'f4'), ('theta', 'f4')])
         for idx, param in enumerate(tqdm(selected_params)):
             capillary = CapillaryImage(yx_r=param[0],
                                        l_band=param[1],
                                        taper_to_c1_dist=param[2])
             fig, ax = plt.subplots(figsize=capillary.figsize)
             capillary.generate_image(ax, is_annotate=False)
-            img_fp = str(self.save_img_dir / str(idx + 1).zfill(5)) + '.png'
+            img_fp = str(self.save_img_dir / str(idx).zfill(5)) + '.png'
             plt.axis('off')
             fig.tight_layout(pad=0)
 
@@ -277,8 +278,7 @@ class CapillaryImageGenerator(ImageGenerator):
             plt.savefig(self.save_img_dir / img_fp)
             plt.close(fig)
             plt.clf()
-            res = np.append(res,
-                            np.array([idx + 1, capillary.l_band, capillary.r_band, capillary.volume, capillary.theta]))
+            res[idx] = np.array([(idx, capillary.l_band, capillary.r_band, capillary.volume, capillary.theta)], dtype=[('idx', 'i4'), ('l_band', 'f4'), ('r_band', 'f4'), ('volume', 'f4'), ('theta', 'f4')])
 
         res_fp = str(self.save_img_dir / 'targets')
         np.save(res_fp, res, allow_pickle=False)
@@ -300,4 +300,3 @@ if __name__ == "__main__":
     # plt.show()
     cap = CapillaryImageGenerator(save_dir=None, num_images=1000)
     cap.generate()
-    breakpoint()
