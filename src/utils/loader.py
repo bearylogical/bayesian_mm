@@ -16,7 +16,47 @@ class DataLoaderError(Exception):
     pass
 
 
-class DataLoader(Sequence):
+class RegressionDataLoader(Sequence):
+    def __init__(self,
+                 batch_size,
+                 img_size,
+                 input_img_paths:List,
+                 target_data_path,
+                 num_targets: int = 4,
+                 is_rgb = False):
+        self.batch_size = batch_size
+        self.img_size = img_size
+        self.input_img_paths = input_img_paths
+        self.target_data_path = target_data_path
+        self.channels = 3 if is_rgb else 1
+        self.color_mode = "rgb" if is_rgb else "grayscale"
+        self._is_rgb = is_rgb
+        self.num_targets = num_targets
+
+    def __len__(self):
+        return len(self.input_img_paths) // self.batch_size
+
+    def __getitem__(self, idx):
+        """Returns tuple (input, target) correspond to batch #idx."""
+        i = idx * self.batch_size
+        batch_input_img_paths = self.input_img_paths[i: i + self.batch_size]
+        batch_input_img_idx = [int(os.path.split(f)[1].split('.')[0]) for f in batch_input_img_paths]
+        y_data = np.load(self.target_data_path)
+        y = np.zeros((self.batch_size, self.num_targets))
+        # batch_target_img_paths = self.target_img_paths[i: i + self.batch_size]
+        x = np.zeros((self.batch_size,) + self.img_size + (self.channels,), dtype="float32")
+        for j, path in enumerate(batch_input_img_paths):
+            img = load_img(path, color_mode=self.color_mode, target_size=self.img_size)
+            img = img_to_array(img)
+            img = normalize(img) # normalise inputs such that [0,1]
+            x[j] = img if self._is_rgb else np.expand_dims(img, axis=0)
+        for i,img_idx in enumerate(batch_input_img_idx):
+            mask = y_data['idx'] == img_idx
+            y[i] = y_data[mask].item()[1:]
+        return x, y
+
+
+class SegmentDataLoader(Sequence):
     def __init__(self,
                  batch_size,
                  img_size,
@@ -73,6 +113,11 @@ def _get_images_from_dir(image_dir: str, sort=True) -> List[Tuple[str, str, str]
         return sorted(image_list, key=lambda x : x[0]) # sort by the file nam
     else:
         return image_list
+
+def get_image_paths_from_dir(image_dir:str):
+    img_list = _get_images_from_dir(image_dir)
+
+    return [img[2] for img in img_list]
 
 
 def _get_img_seg_path(src_dir: str, img_dir_name:str = "images", segment_dir_name:str = "segment"):
