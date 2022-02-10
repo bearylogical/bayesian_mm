@@ -40,7 +40,7 @@ def plot_samples_matplotlib(display_list, figsize=(10, 9)):
 def display_img_annotated(img: Image.Image, data:dict, decimals:int= 3):
     # TODO: might need to make this more generalizable. I.e. for unknown images with supplied types.
     fig, ax = plt.subplots()
-    ax.imshow(img, aspect='auto')
+    ax.imshow(img, cmap='gray', aspect='auto')
     img_height = img.height
     font_size = 10
     offset = font_size + 3 # kinda arbitrary but it works
