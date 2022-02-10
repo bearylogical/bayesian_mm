@@ -66,6 +66,7 @@ class CapillaryImage:
         self.figsize = (10, 10)
         self.fill_alpha_inner = 0.03  # alpha (transparency) for the "confined" ellipsoid
         self.fill_alpha_outer = 0.5
+        self.capillary_line_width = 5
 
     def _check_bounds(self):
         # check for theta (if deg or rad and convert appropriately)
@@ -217,10 +218,9 @@ class CapillaryImage:
         self.r_band = coords["data"]["r_band"]
         self.volume = coords["data"]["volume"]
 
-        capillary_line_width = 2
-        ax.plot(coords_L1[0], coords_L1[1], color='k', label='L1', linewidth=capillary_line_width)
-        ax.plot(coords_L2[0], coords_L2[1], color='k', label='L2', linewidth=capillary_line_width)
-        ax.plot(coords_b3[0], coords_b3[1], color='k', linewidth=capillary_line_width)
+        ax.plot(coords_L1[0], coords_L1[1], color='k', label='L1', linewidth=self.capillary_line_width)
+        ax.plot(coords_L2[0], coords_L2[1], color='k', label='L2', linewidth=self.capillary_line_width)
+        ax.plot(coords_b3[0], coords_b3[1], color='k', linewidth=self.capillary_line_width)
         # ax.plot(coords_b2[0], coords_b2[1], color='k')
         ax.set_xlim(0, self.dim[0])
         ax.set_ylim(0, self.dim[1])
@@ -233,6 +233,7 @@ class CapillaryImage:
                                          fill=False,
                                          closed=True,
                                          edgecolor='k',
+                                         linewidth=3,
                                          alpha=self.fill_alpha_outer)
 
         ax.add_patch(trapped_particle_inner)
@@ -262,7 +263,7 @@ class CapillaryImageGenerator(ImageGenerator):
         parameter_space = product(available_ref_coord, available_l_band, available_taper_c1_dist)
         selected_params = random.sample(list(parameter_space), self.num_images)
         # initialise our results array : [idx, lband, rband, vol, theta]
-        res = np.zeros((self.num_images),
+        res = np.zeros(self.num_images,
                        dtype=[('idx', 'i4'), ('l_band', 'f4'), ('r_band', 'f4'), ('volume', 'f4'), ('theta', 'f4')])
         for idx, param in enumerate(tqdm(selected_params)):
             capillary = CapillaryImage(yx_r=param[0],
@@ -278,7 +279,10 @@ class CapillaryImageGenerator(ImageGenerator):
             plt.savefig(self.save_img_dir / img_fp)
             plt.close(fig)
             plt.clf()
-            res[idx] = np.array([(idx, capillary.l_band, capillary.r_band, capillary.volume, capillary.theta)], dtype=[('idx', 'i4'), ('l_band', 'f4'), ('r_band', 'f4'), ('volume', 'f4'), ('theta', 'f4')])
+            res[idx] = np.array([(idx, capillary.l_band, capillary.r_band, capillary.volume, capillary.theta)],
+                                dtype=[('idx', 'i4'), ('l_band', 'f4'),
+                                       ('r_band', 'f4'), ('volume', 'f4'),
+                                       ('theta', 'f4')])
 
         res_fp = str(self.save_img_dir / 'targets')
         np.save(res_fp, res, allow_pickle=False)
@@ -298,5 +302,5 @@ if __name__ == "__main__":
     # fig, ax = plt.subplots()
     # single_cap.generate_image(ax)
     # plt.show()
-    cap = CapillaryImageGenerator(save_dir=None, num_images=1000)
+    cap = CapillaryImageGenerator(save_dir=None, num_images=10)
     cap.generate()
