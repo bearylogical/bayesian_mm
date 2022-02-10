@@ -3,14 +3,15 @@ from keras.layers import Conv2D, Dense, Flatten, MaxPooling2D
 
 
 class ImageRegressionModel(Model):
-    def __init__(self):
+    def __init__(self, num_target=4):
         super().__init__()
         self.conv_1 = Conv2D(32, (3, 3), activation='relu', input_shape=(128, 128, 1))
         self.pool_1 = MaxPooling2D((5,5))
         self.conv_2 = Conv2D(16, 3, activation='relu')
         self.pool_2 = MaxPooling2D((3, 3))
         self.flatten_1 = Flatten()
-        self.dense3 = Dense(5)
+        self.dense3 = Dense(num_target)
+        self.num_target = num_target
 
     def call(self, inputs, training=None, mask=None):
         x = self.conv_1(inputs)
@@ -47,9 +48,6 @@ if __name__ == "__main__":
 
     train_gen = RegressionDataLoader(input_img_paths=train_img_paths, **gen_kwargs)
     test_gen = RegressionDataLoader(input_img_paths=test_img_paths, **gen_kwargs)
-
-    imgress.compile(loss='mse')
-    imgress.fit(train_gen, batch_size=batch_size, validation_data=test_gen, epochs=100, verbose=1)
 
     # train_sample
 
