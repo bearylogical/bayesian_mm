@@ -110,7 +110,7 @@ def train(experiment_name: Union[str, None] = "DefaultProject", task="T1", **kwa
     imgress.fit(train_gen, batch_size=batch_size, validation_data=test_gen, epochs=epochs,
                 callbacks=[WandbCallback(),  # using WandbCallback to log default metrics.
                            LRLogger(optimizer)])  # using callback to log learning rate.)
-    model_save_path = kwargs.get('model_path', Path.cwd() / 'dataset' / (experiment_name + "_" + strftime("%Y%m%d")))
+    model_save_path = kwargs.get('model_path', Path.cwd() / 'models' / (experiment_name + "_" + strftime("%Y%m%d")))
     logger.debug(f"Model Saving to {model_save_path}")
     model_save_path.mkdir(parents=True, exist_ok=True)
     imgress.save(model_save_path)
