@@ -9,7 +9,7 @@ from typing import Tuple, Union, Dict
 import matplotlib.pyplot as plt
 from matplotlib.patches import Polygon
 from matplotlib.axes import Axes
-from itertools import product
+from itertools import product, chain
 from tqdm import tqdm
 import random
 
@@ -176,6 +176,15 @@ class CapillaryImage:
         r2 = b2_y2 - b2_y1
         volume = round(_calc_vol(r1, r2, b1_x2, b2_x2, l_band), 2)
 
+        # For reframed prediction task
+        x0 = yx_r[::-1]  # it was in yx space, convert to xy
+        x1 = (b1_x1, b1_y1)
+        x2 = (b2_x1, b2_y1)
+        x3 = (b1_x3, b1_y3)
+        x4 = (b2_x3, b2_x3)
+        x5 = (b1_x2, b1_y2)
+        x6 = (b2_x2, b2_y2)
+
         coords = {
             "L1": (x_L1, y_L1),
             "L2": (x_L2, y_L2),
@@ -183,6 +192,7 @@ class CapillaryImage:
             "B2": (b2_xf, b2_yf),
             "EL": (x_v, y_v),
             "B3": (b3_xf, b3_yf),
+            "T1": np.array([x0, x1, x2, x3, x4, x5, x6]).flatten(),
             "data":
                 dict(r_band=r_band, l_band=l_band, volume=volume)
         }
@@ -217,6 +227,7 @@ class CapillaryImage:
         self.l_band = coords["data"]["l_band"]
         self.r_band = coords["data"]["r_band"]
         self.volume = coords["data"]["volume"]
+        self.coords = coords["T1"]
 
         ax.plot(coords_L1[0], coords_L1[1], color='k', label='L1', linewidth=self.capillary_line_width)
         ax.plot(coords_L2[0], coords_L2[1], color='k', label='L2', linewidth=self.capillary_line_width)
@@ -263,8 +274,17 @@ class CapillaryImageGenerator(ImageGenerator):
         parameter_space = product(available_ref_coord, available_l_band, available_taper_c1_dist)
         selected_params = random.sample(list(parameter_space), self.num_images)
         # initialise our results array : [idx, lband, rband, vol, theta]
-        res = np.zeros(self.num_images,
-                       dtype=[('idx', 'i4'), ('l_band', 'f4'), ('r_band', 'f4'), ('volume', 'f4'), ('theta', 'f4')])
+        idx_dtype = ('idx', 'i4')
+        T0_dtypes = [idx_dtype, ('l_band', 'f4'), ('r_band', 'f4'),
+                     ('volume', 'f4'), ('theta', 'f4')]
+
+        T1_dtypes = [('idx', 'i4')]
+        T1_coords = [[(f'x{x}', 'i4'), (f'y{x}', 'i4')] for x in range(7)]
+        T1_dtypes.extend(list(chain.from_iterable(T1_coords)))
+
+        res_T0 = np.zeros(self.num_images,
+                          dtype=T0_dtypes)
+        res_T1 = np.zeros(self.num_images, dtype=T1_dtypes)
         for idx, param in enumerate(tqdm(selected_params)):
             capillary = CapillaryImage(yx_r=param[0],
                                        l_band=param[1],
@@ -279,13 +299,14 @@ class CapillaryImageGenerator(ImageGenerator):
             plt.savefig(self.save_img_dir / img_fp)
             plt.close(fig)
             plt.clf()
-            res[idx] = np.array([(idx, capillary.l_band, capillary.r_band, capillary.volume, capillary.theta)],
-                                dtype=[('idx', 'i4'), ('l_band', 'f4'),
-                                       ('r_band', 'f4'), ('volume', 'f4'),
-                                       ('theta', 'f4')])
+
+            res_T0[idx] = np.array([(idx, capillary.l_band, capillary.r_band, capillary.volume, capillary.theta)],
+                                   dtype=T0_dtypes)
+
+            res_T1[idx] = np.array([(idx, *capillary.coords)], dtype=T1_dtypes)
 
         res_fp = str(self.save_img_dir / 'targets')
-        np.save(res_fp, res, allow_pickle=False)
+        np.savez(res_fp, T0=res_T0, T1=res_T1, allow_pickle=False)
 
 
 def _calc_vol(r1, r2, b1, b2, l_band):
