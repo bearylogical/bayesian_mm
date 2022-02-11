@@ -8,6 +8,8 @@ from tensorflow.keras.preprocessing.image import load_img, img_to_array
 from typing import List, Tuple, Union
 from PIL import Image
 
+VALID_TASKS = ["T0", "T1"]
+
 
 # Code modified from Image Segmentation Keras library
 # Divam Gupta, Rounaq Wala , Marius Juston, JaledMC
@@ -48,13 +50,21 @@ class BaseDataLoader(Sequence):
 
 
 class BaseRegressionDataLoader(BaseDataLoader):
-    def __init__(self, batch_size, img_size, input_img_paths, target_paths, num_targets=4, fields=None):
+    def __init__(self, batch_size, img_size, input_img_paths, target_paths, num_targets=4,task: str = "T1", fields=None):
         super().__init__(batch_size, img_size, input_img_paths, target_paths)
+        self.target_data_path = target_paths
         self.num_targets = num_targets
         self.fields = fields
+        self.task = task
+
+        self._check_task()
+
+    def _check_task(self):
+        if self.task not in VALID_TASKS:
+            raise AttributeError(f"Task: {self.task}Not a valid task")
 
     def _get_target_data(self, batch_input_img_idx, fields):
-        y_data = np.load(self.target_data_path)
+        y_data = np.load(self.target_data_path)[self.task]
         y = np.zeros((self.batch_size, self.num_targets))
         for i, img_idx in enumerate(batch_input_img_idx):
             y[i] = get_target_data_from_idx(y_data, img_idx, fields=fields)
@@ -62,8 +72,8 @@ class BaseRegressionDataLoader(BaseDataLoader):
 
 
 class RegressionDataLoaderT0(BaseRegressionDataLoader):
-    def __init__(self, batch_size, img_size, input_img_paths, target_paths, num_targets=4, fields=None):
-        super().__init__(batch_size, img_size, input_img_paths, target_paths, fields)
+    def __init__(self, batch_size, img_size, input_img_paths, target_paths, num_targets=4, task=None, fields=None):
+        super().__init__(batch_size, img_size, input_img_paths, target_paths, fields, task)
         self.num_targets = num_targets
 
     def __getitem__(self, idx):
@@ -78,8 +88,9 @@ class RegressionDataLoaderT0(BaseRegressionDataLoader):
 
 
 class RegressionDataLoaderT1(BaseRegressionDataLoader):
-    def __init__(self, batch_size, img_size, input_img_paths, target_paths, num_targets=4, fields=None, normalize:bool=True):
-        super().__init__(batch_size, img_size, input_img_paths, target_paths, fields)
+    def __init__(self, batch_size, img_size, input_img_paths, target_paths, num_targets=4,task=None, fields=None,
+                 normalize: bool = True ):
+        super().__init__(batch_size, img_size, input_img_paths, target_paths, fields, task)
         self.num_targets = num_targets
         self.normalize = normalize
 
@@ -117,7 +128,7 @@ class SegmentDataLoader(BaseDataLoader):
         return x, y
 
 
-def normalize(input_image: np.ndarray, max_val:float=255.0):
+def normalize(input_image: np.ndarray, max_val: float = 255.0):
     input_image = input_image.astype("float32") / max_val
     return input_image
 
@@ -254,8 +265,6 @@ def get_pairs_from_paths(images_path: str, segs_path: str, ignore_non_match: boo
 
 
 if __name__ == "__main__":
-
-
     generation_date = "20220210"
     demo_img_path = get_image_paths_from_dir(f"dataset/{generation_date}/images")[3]
     t_data_path = f"dataset/{generation_date}/images/targets.npy"
