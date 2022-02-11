@@ -5,7 +5,7 @@ from src.utils.constants import ACCEPTABLE_IMAGE_FORMATS, \
     ACCEPTABLE_SEGMENTATION_FORMATS
 import numpy as np
 from tensorflow.keras.preprocessing.image import load_img, img_to_array
-from typing import List, Tuple
+from typing import List, Tuple, Union
 from PIL import Image
 
 
@@ -18,58 +18,87 @@ class DataLoaderError(Exception):
     pass
 
 
-class RegressionDataLoader(Sequence):
+class BaseDataLoader(Sequence):
     def __init__(self,
                  batch_size,
                  img_size,
-                 input_img_paths: List,
-                 target_data_path,
-                 num_targets: int = 4,
+                 input_img_paths,
+                 target_paths,
                  is_rgb=False):
         self.batch_size = batch_size
         self.img_size = img_size
         self.input_img_paths = input_img_paths
-        self.target_data_path = target_data_path
+        self.target_img_paths = target_paths
         self.channels = 3 if is_rgb else 1
         self.color_mode = "rgb" if is_rgb else "grayscale"
         self._is_rgb = is_rgb
-        self.num_targets = num_targets
 
     def __len__(self):
         return len(self.input_img_paths) // self.batch_size
 
-    def __getitem__(self, idx):
-        """Returns tuple (input, target) correspond to batch #idx."""
-        i = idx * self.batch_size
-        batch_input_img_paths = self.input_img_paths[i: i + self.batch_size]
-        batch_input_img_idx = [get_idx_from_img_path(f) for f in batch_input_img_paths]
-        y_data = np.load(self.target_data_path)
-        y = np.zeros((self.batch_size, self.num_targets))
+    def _get_input_image_data(self, batch_input_img_paths):
         x = np.zeros((self.batch_size,) + self.img_size + (self.channels,), dtype="float32")
         for j, path in enumerate(batch_input_img_paths):
             img = load_img(path, color_mode=self.color_mode, target_size=self.img_size)
             img = img_to_array(img)
             img = normalize(img)  # normalise inputs such that [0,1]
             x[j] = img if self._is_rgb else np.expand_dims(img, axis=0)
+
+        return x
+
+
+class BaseRegressionDataLoader(BaseDataLoader):
+    def __init__(self, batch_size, img_size, input_img_paths, target_paths, num_targets=4, fields=None):
+        super().__init__(batch_size, img_size, input_img_paths, target_paths)
+        self.num_targets = num_targets
+        self.fields = fields
+
+    def _get_target_data(self, batch_input_img_idx, fields):
+        y_data = np.load(self.target_data_path)
+        y = np.zeros((self.batch_size, self.num_targets))
         for i, img_idx in enumerate(batch_input_img_idx):
-            y[i] = get_target_data_from_idx(y_data, img_idx)
+            y[i] = get_target_data_from_idx(y_data, img_idx, fields=fields)
+        return y
+
+
+class RegressionDataLoaderT0(BaseRegressionDataLoader):
+    def __init__(self, batch_size, img_size, input_img_paths, target_paths, num_targets=4, fields=None):
+        super().__init__(batch_size, img_size, input_img_paths, target_paths, fields)
+        self.num_targets = num_targets
+
+    def __getitem__(self, idx):
+        """Returns tuple (input, target) correspond to batch #idx."""
+        i = idx * self.batch_size
+        batch_input_img_paths = self.input_img_paths[i: i + self.batch_size]
+        batch_input_img_idx = [get_idx_from_img_path(f) for f in batch_input_img_paths]
+
+        x = self._get_input_image_data(batch_input_img_paths)
+        y = self._get_target_data(batch_input_img_idx, fields=self.fields)
         return x, y
 
 
-class SegmentDataLoader(Sequence):
-    def __init__(self,
-                 batch_size,
-                 img_size,
-                 input_img_paths,
-                 target_img_paths,
-                 is_rgb=False):
-        self.batch_size = batch_size
-        self.img_size = img_size
-        self.input_img_paths = input_img_paths
-        self.target_img_paths = target_img_paths
-        self.channels = 3 if is_rgb else 1
-        self.color_mode = "rgb" if is_rgb else "grayscale"
-        self._is_rgb = is_rgb
+class RegressionDataLoaderT1(BaseRegressionDataLoader):
+    def __init__(self, batch_size, img_size, input_img_paths, target_paths, num_targets=4, fields=None, normalize:bool=True):
+        super().__init__(batch_size, img_size, input_img_paths, target_paths, fields)
+        self.num_targets = num_targets
+        self.normalize = normalize
+
+    def __getitem__(self, idx):
+        """Returns tuple (input, target) correspond to batch #idx."""
+        i = idx * self.batch_size
+        batch_input_img_paths = self.input_img_paths[i: i + self.batch_size]
+        batch_input_img_idx = [get_idx_from_img_path(f) for f in batch_input_img_paths]
+
+        x = self._get_input_image_data(batch_input_img_paths)
+        y = self._get_target_data(batch_input_img_idx, fields=self.fields)
+        if self.normalize:
+            y = normalize(y)
+        return x, y
+
+
+class SegmentDataLoader(BaseDataLoader):
+    def __init__(self, batch_size, img_size, input_img_paths, target_paths):
+        super().__init__(batch_size, img_size, input_img_paths, target_paths)
 
     def __len__(self):
         return len(self.target_img_paths) // self.batch_size
@@ -79,23 +108,17 @@ class SegmentDataLoader(Sequence):
         i = idx * self.batch_size
         batch_input_img_paths = self.input_img_paths[i: i + self.batch_size]
         batch_target_img_paths = self.target_img_paths[i: i + self.batch_size]
-        x = np.zeros((self.batch_size,) + self.img_size + (self.channels,), dtype="float32")
-        for j, path in enumerate(batch_input_img_paths):
-            img = load_img(path, color_mode=self.color_mode, target_size=self.img_size)
-            img = img_to_array(img)
-            img = normalize(img)  # normalise inputs such that [0,1]
-            x[j] = img if self._is_rgb else np.expand_dims(img, 2)
+        x = self._get_input_image_data(batch_input_img_paths)
+
         y = np.zeros((self.batch_size,) + self.img_size + (1,), dtype="uint8")
         for j, path in enumerate(batch_target_img_paths):
             img = load_img(path, target_size=self.img_size, color_mode="grayscale")
             y[j] = np.expand_dims(img, 2)
-            # Ground truth labels are 1, 2, 3. Subtract one to make them 0, 1, 2:
-            # y[j] -= 1
         return x, y
 
 
-def normalize(input_image: np.ndarray):
-    input_image = input_image.astype("float32") / 255.0
+def normalize(input_image: np.ndarray, max_val:float=255.0):
+    input_image = input_image.astype("float32") / max_val
     return input_image
 
 
@@ -135,31 +158,47 @@ def get_idx_from_img_path(img_path: str) -> int:
     return int(os.path.split(img_path)[1].split('.')[0])
 
 
-def get_target_data_from_idx(data: np.ndarray, img_idx: int, include_idx=False) -> Tuple:
+def get_target_data_from_idx(data: np.ndarray, img_idx: int, include_idx=False,
+                             fields: Union[List[str], None] = None) -> Tuple:
     """
     Returns a tuple containing the target data
-    :param data:
-    :param img_idx:
+    :param data: Structured np.ndarray as input
+    :param img_idx: Index of image that data is being requested for
+    :param include_idx: Bool. If true, includes the idx value which is always at the start of the array.
+    :param fields: Data fields to include. Defaults to None. When include_idx is included, all the rows are returned as
+    a Tuple.
     :return:
     """
     # TODO: this is a very course data getter. needs some validation logic
     mask = data['idx'] == img_idx
+    f_data = data[mask]
+    if fields is None:
+        start_idx = 0 if include_idx else 1
+        return f_data.item()[start_idx:]
+    else:
+        return f_data[fields].item()
 
-    strt_idx = 0 if include_idx else 1
-    return data[mask].item()[strt_idx:]
 
-
-def get_img_target_data(img_path: str, data_path: str, img_size:Tuple[int, int]= (320,320)) -> Tuple[Image.Image, dict]:
+def get_img_target_data(img_path: str, data_path: str, img_size: Tuple[int, int] = (320, 320), task: str = "T1") -> \
+        Tuple[Image.Image, dict]:
     """
     Returns a tuple containing the Image as a PIL instance and a dictionary
     with the field property as key and its associated value.
-    :param img_path:
-    :param data_path:
+    :param task: Refer to Prediction Task document
+    :param img_size: Size of the image (Int, Int)
+    :param img_path: Path of the image file
+    :param data_path: Path to either the npz or npy file containing the data
     :return:
     """
     img = load_img(img_path, target_size=img_size)  # should be given
     img_idx = get_idx_from_img_path(img_path)  # should be given
-    src_data = np.load(data_path)
+
+    data_path_ext = os.path.splitext(data_path)[-1]
+
+    if data_path_ext == ".npz":
+        src_data = np.load(data_path)[task]
+    else:
+        src_data = np.load(data_path)
 
     field_names = src_data.dtype.names
     img_props = get_target_data_from_idx(src_data, img_idx, include_idx=True)
@@ -169,7 +208,7 @@ def get_img_target_data(img_path: str, data_path: str, img_size:Tuple[int, int]=
 
 def _get_img_seg_path(src_dir: str, img_dir_name: str = "images", segment_dir_name: str = "segment"):
     """
-    Gets the directory of the
+    Gets the directory of the image and segments
     :param src_dir:
     :param img_dir_name:
     :param segment_dir_name:
@@ -215,8 +254,9 @@ def get_pairs_from_paths(images_path: str, segs_path: str, ignore_non_match: boo
 
 
 if __name__ == "__main__":
-    from src.utils.viewer import display_img_annotated
+
+
     generation_date = "20220210"
     demo_img_path = get_image_paths_from_dir(f"dataset/{generation_date}/images")[3]
-    data_path = f"dataset/{generation_date}/images/targets.npy"
-    target_info = get_img_target_data(demo_img_path, data_path)
+    t_data_path = f"dataset/{generation_date}/images/targets.npy"
+    target_info = get_img_target_data(demo_img_path, t_data_path)
