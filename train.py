@@ -112,7 +112,7 @@ def train(experiment_name: Union[str, None] = "DefaultProject", task="T1", **kwa
                            LRLogger(optimizer)])  # using callback to log learning rate.)
 
     model_save_path = kwargs.get('model_path', Path.cwd() / 'models' )
-    model_save_path = model_save_path / (experiment_name + "_" + strftime("%Y%m%d"))
+    model_save_path = Path(model_save_path) / (experiment_name + "_" + strftime("%Y%m%d"))
     logger.debug(f"Model Saving to {model_save_path}")
     model_save_path.mkdir(parents=True, exist_ok=True)
     imgress.save(model_save_path)
