@@ -103,7 +103,7 @@ class RegressionDataLoaderT1(BaseRegressionDataLoader):
         x = self._get_input_image_data(batch_input_img_paths)
         y = self._get_target_data(batch_input_img_idx, fields=self.fields)
         if self.normalize:
-            y = normalize(y)
+            y = normalize(y, float(self.img_size))
         return x, y
 
 
