@@ -3,12 +3,14 @@ import random
 from src.utils.shapes.shapes import ImageGenerator, \
     get_bezier_parameters, \
     bezier_curve
+from src.utils.viewer import get_figsize
 import numpy as np
 from skimage.draw import line
 from typing import Tuple, Union, Dict
 import matplotlib.pyplot as plt
 from matplotlib.patches import Polygon
 from matplotlib.axes import Axes
+from matplotlib.image import imsave
 from itertools import product, chain
 from tqdm import tqdm
 import random
@@ -66,7 +68,7 @@ class CapillaryImage:
         self.figsize = (10, 10)
         self.fill_alpha_inner = 0.03  # alpha (transparency) for the "confined" ellipsoid
         self.fill_alpha_outer = 0.5
-        self.capillary_line_width = 5
+        self.capillary_line_width = 3
 
     def _check_bounds(self):
         # check for theta (if deg or rad and convert appropriately)
@@ -181,7 +183,7 @@ class CapillaryImage:
         x1 = (b1_x1, b1_y1)
         x2 = (b2_x1, b2_y1)
         x3 = (b1_x3, b1_y3)
-        x4 = (b2_x3, b2_x3)
+        x4 = (b2_x3, b2_y3)
         x5 = (b1_x2, b1_y2)
         x6 = (b2_x2, b2_y2)
 
@@ -244,7 +246,7 @@ class CapillaryImage:
                                          fill=False,
                                          closed=True,
                                          edgecolor='k',
-                                         linewidth=3,
+                                         linewidth=2,
                                          alpha=self.fill_alpha_outer)
 
         ax.add_patch(trapped_particle_inner)
@@ -289,11 +291,14 @@ class CapillaryImageGenerator(ImageGenerator):
             capillary = CapillaryImage(yx_r=param[0],
                                        l_band=param[1],
                                        taper_to_c1_dist=param[2])
-            fig, ax = plt.subplots(figsize=capillary.figsize)
+
+            fig, ax = plt.subplots(figsize=get_figsize(*capillary.dim))
             capillary.generate_image(ax, is_annotate=False)
-            img_fp = str(self.save_img_dir / str(idx).zfill(5)) + '.png'
+
             plt.axis('off')
             fig.tight_layout(pad=0)
+            img_fp = str(self.save_img_dir / str(idx).zfill(5)) + '.png'
+            scale_factor = fig.get_size_inches()
 
             # plt.autoscale(tight=True)
             plt.savefig(self.save_img_dir / img_fp)
@@ -304,6 +309,8 @@ class CapillaryImageGenerator(ImageGenerator):
                                    dtype=T0_dtypes)
 
             res_T1[idx] = np.array([(idx, *capillary.coords)], dtype=T1_dtypes)
+
+
 
         res_fp = str(self.save_img_dir / 'targets')
         np.savez(res_fp, T0=res_T0, T1=res_T1, allow_pickle=False)

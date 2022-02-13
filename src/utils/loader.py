@@ -7,7 +7,7 @@ import numpy as np
 from tensorflow.keras.preprocessing.image import load_img, img_to_array
 from typing import List, Tuple, Union
 from PIL import Image
-
+from pathlib import Path
 VALID_TASKS = ["T0", "T1"]
 
 
@@ -190,7 +190,7 @@ def get_target_data_from_idx(data: np.ndarray, img_idx: int, include_idx=False,
         return f_data[fields].item()
 
 
-def get_img_target_data(img_path: str, data_path: str, img_size: Tuple[int, int] = (320, 320), task: str = "T1") -> \
+def get_img_target_data(img_path: Union[str, Path], data_path: Union[str, Path], img_size: Union[Tuple[int, int] , None]=None, task: str = "T1", include_idx=False) -> \
         Tuple[Image.Image, dict]:
     """
     Returns a tuple containing the Image as a PIL instance and a dictionary
@@ -199,6 +199,7 @@ def get_img_target_data(img_path: str, data_path: str, img_size: Tuple[int, int]
     :param img_size: Size of the image (Int, Int)
     :param img_path: Path of the image file
     :param data_path: Path to either the npz or npy file containing the data
+    :param include_idx: Include the id col
     :return:
     """
     img = load_img(img_path, target_size=img_size)  # should be given
@@ -211,8 +212,9 @@ def get_img_target_data(img_path: str, data_path: str, img_size: Tuple[int, int]
     else:
         src_data = np.load(data_path)
 
-    field_names = src_data.dtype.names
-    img_props = get_target_data_from_idx(src_data, img_idx, include_idx=True)
+    start_idx = 0 if include_idx else 1
+    field_names = src_data.dtype.names[start_idx:]
+    img_props = get_target_data_from_idx(src_data, img_idx, include_idx=include_idx)
 
     return img, dict(zip(field_names, img_props))
 
