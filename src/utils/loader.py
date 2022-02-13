@@ -103,7 +103,11 @@ class RegressionDataLoaderT1(BaseRegressionDataLoader):
         x = self._get_input_image_data(batch_input_img_paths)
         y = self._get_target_data(batch_input_img_idx, fields=self.fields)
         if self.normalize:
-            y = normalize(y, float(self.img_size))
+            if self.img_size[0] != self.img_size[1]:
+                raise DataLoaderError(f"Image size not equal:"
+                                      f"{self.img_size[0]} "
+                                      f"not equal to {self.img_size[1]}")
+            y = normalize(y, float(self.img_size[0]))
         return x, y
 
 
