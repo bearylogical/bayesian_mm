@@ -79,7 +79,7 @@ def display_img_coords(img: Image.Image, coords: np.ndarray, marker_size=2):
     fig = plt.figure(figsize=get_figsize(*img.size))
     ax = fig.add_axes([0, 0, 1, 1])
     ax.imshow(img, origin='lower', cmap='gray', aspect='auto')
-    ax.scatter(coords[:, 0], coords[:, 1], c=marker_size)
+    ax.scatter(coords[:, 0], coords[:, 1], marker_size)
     plt.axis('off')
     plt.show()
 
