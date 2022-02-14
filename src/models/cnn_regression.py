@@ -1,10 +1,11 @@
 from keras import Model, Input
-from keras.layers import Conv2D, Dense, Flatten, MaxPooling2D
+from keras.layers import Conv2D, Dense, Flatten, MaxPooling2D, Resizing
 
 
 class ImageRegressionModel(Model):
-    def __init__(self, num_target=4):
+    def __init__(self, num_target=4, img_size:tuple=(128,128)):
         super().__init__()
+        self.preprocess_resize = Resizing(*img_size, crop_to_aspect_ratio=True)
         self.conv_1 = Conv2D(32, (3, 3), activation='relu', input_shape=(128, 128, 1))
         self.pool_1 = MaxPooling2D((5,5))
         self.conv_2 = Conv2D(16, 3, activation='relu')
@@ -14,7 +15,8 @@ class ImageRegressionModel(Model):
         self.num_target = num_target
 
     def call(self, inputs, training=None, mask=None):
-        x = self.conv_1(inputs)
+        x = self.preprocess_resize(inputs)
+        x = self.conv_1(x)
         x = self.pool_1(x)
         x = self.conv_2(x)
         x = self.pool_2(x)
