@@ -1,5 +1,3 @@
-import os
-from tensorflow.keras.utils import Sequence
 from tensorflow.keras import Input
 from tensorflow.keras.optimizers import Adam
 from tensorflow.keras.optimizers.schedules import ExponentialDecay
@@ -8,6 +6,7 @@ from src.models.cnn_regression import ImageRegressionModel
 from wandb.keras import WandbCallback
 from src.utils.experiment import LRLogger
 import wandb
+from functools import partial
 from typing import Union
 import logging
 
@@ -48,10 +47,10 @@ def train_test_split(training_pct, img_dir, data_loader, **kwargs):
     return train_gen, test_gen
 
 
-def build_model(is_summary: bool = False):
+def build_model(is_summary: bool = False, img_size: tuple = (128, 128)):
     logger.info("Creating Model")
     model_input = Input((128, 128, 1))
-    imgress = ImageRegressionModel(14)
+    imgress = ImageRegressionModel(14, img_size=img_size)
     imgress.build(input_shape=(None, 128, 128, 1))
     if is_summary:
         imgress.call(model_input)
@@ -79,9 +78,12 @@ def train(experiment_name: Union[str, None] = "DefaultProject", task="T1", **kwa
     else:
         NUM_TARGETS = 4
 
-    gen_kwargs = dict(target_paths=data_path, num_targets=NUM_TARGETS, batch_size=batch_size, img_size=img_size,
+    gen_kwargs = dict(target_paths=data_path, num_targets=NUM_TARGETS,
+                      batch_size=batch_size, img_size=img_size,
                       task=task)
-    train_gen, test_gen = train_test_split(training_pct, img_save_dir, RegressionDataLoaderT1, **gen_kwargs)
+    train_gen, test_gen = train_test_split(training_pct, img_save_dir,
+                                           partial(RegressionDataLoaderT1, normalize=False),
+                                           **gen_kwargs)
 
     # experiment tracking
     logger.debug(f"Setting up wandb instance of {experiment_name}")
@@ -104,15 +106,15 @@ def train(experiment_name: Union[str, None] = "DefaultProject", task="T1", **kwa
     })
 
     # retrieve model
-    imgress = build_model(is_summary=True)
+    imgress = build_model(is_summary=True, img_size=img_size)
     logger.info("Compiling model for training")
     imgress.compile(optimizer=optimizer, loss='mse')
     imgress.fit(train_gen, batch_size=batch_size, validation_data=test_gen, epochs=epochs,
                 callbacks=[WandbCallback(),  # using WandbCallback to log default metrics.
-                           LRLogger(optimizer)])  # using callback to log learning rate.)
+                           LRLogger(optimizer)])  # using callback to log learning rate.
 
-    model_save_path = kwargs.get('model_path', Path.cwd() / 'models' )
-    model_save_path = Path(model_save_path) / (experiment_name + "_" + strftime("%Y%m%d"))
+    model_save_path = kwargs.get('model_path', Path.cwd() / 'models')
+    model_save_path = Path(model_save_path) / (experiment_name + "_" + strftime("%Y%m%d_%H%M"))
     logger.debug(f"Model Saving to {model_save_path}")
     model_save_path.mkdir(parents=True, exist_ok=True)
     imgress.save(model_save_path)
