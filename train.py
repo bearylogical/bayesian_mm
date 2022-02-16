@@ -8,6 +8,7 @@ from src.models.regression.cnn_regression import ImageRegressionModel
 from wandb.keras import WandbCallback
 from src.utils.experiment import LRLogger
 import wandb
+import os
 from functools import partial
 from typing import Union
 import logging
@@ -27,8 +28,15 @@ def generate_data(num_samples: int = 10):
     from src.utils.shapes.capillary import CapillaryImageGenerator
     logger.info("Creating Images")
     cap = CapillaryImageGenerator(num_images=num_samples)
-    cap.generate()
-    logger.debug(f"{num_samples} images created at {cap.save_img_dir}")
+
+    _, _, files = next(os.walk(cap.save_img_dir))
+    if len(files) != num_samples + 1:
+        logger.debug("No samples detected, creating images")
+        logger.debug(f"{num_samples} images created at {cap.save_img_dir}")
+        cap.generate()
+    else:
+        logger.info("samples detected. reusing existing saved dir")
+
     return cap.save_img_dir
 
 
@@ -50,10 +58,12 @@ def train_test_split(training_pct, img_dir, data_loader, **kwargs):
 
 
 def build_model(is_summary: bool = False, img_size: tuple = (128, 128),
-                model: Model = ImageRegressionModel):
+                model: Union[Model, None] = ImageRegressionModel):
     logger.info("Creating Model")
     model_input = Input((128, 128, 1))
-    imgress = model(14, img_size=img_size)
+    if model is None:
+        model = ImageRegressionModel
+    imgress = model(num_target=14, img_size=img_size)
     imgress.build(input_shape=(None, 128, 128, 1))
     if is_summary:
         imgress.call(model_input)
@@ -67,7 +77,7 @@ def train(experiment_name: Union[str, None] = "DefaultProject", task="T1", **kwa
     from time import strftime
 
     num_samples = kwargs.get('num_samples', 10)
-    batch_size = 10 if num_samples // 50 < 0 else 50
+    batch_size = 5 if num_samples // 50 < 0 else 50
     training_pct = kwargs.get('training_pct', .8)
     img_size = kwargs.get('img_size', (128, 128))
     epochs = kwargs.get('epochs', 10)
@@ -110,7 +120,7 @@ def train(experiment_name: Union[str, None] = "DefaultProject", task="T1", **kwa
     })
 
     # retrieve model
-    imgress = build_model(is_summary=True, img_size=img_size)
+    imgress = build_model(is_summary=True, img_size=img_size, model=model)
     logger.info("Compiling model for training")
     imgress.compile(optimizer=optimizer, loss='mse')
     model_save_path = kwargs.get('model_path', Path.cwd() / 'models')
@@ -140,4 +150,4 @@ def train(experiment_name: Union[str, None] = "DefaultProject", task="T1", **kwa
 
 
 if __name__ == "__main__":
-    train("Test_Experiment")
+    train("Test_Experiment", num_samples=1000, epochs=10)
