@@ -1,4 +1,4 @@
-from tensorflow.keras import Model, Input
+from tensorflow.keras import Model
 from typing import Tuple
 
 class BaseModel(Model):
@@ -12,7 +12,7 @@ class BaseModel(Model):
 
 
 if __name__ == "__main__":
-    from src.models.unet import UnetModel
+    from src.models.classification.unet import UnetModel
     from tensorflow.keras import Input
 
     inputs = Input(shape=(128, 128) + (1,))

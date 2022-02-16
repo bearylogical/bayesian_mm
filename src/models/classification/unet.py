@@ -1,7 +1,4 @@
-from abc import ABC
-
-from src.models.model import BaseModel
-from tensorflow.keras.layers import Input, Conv2D, MaxPooling2D, concatenate, UpSampling2D, Dropout
+from tensorflow.keras.layers import Conv2D, MaxPooling2D, concatenate, UpSampling2D
 from tensorflow.keras import Model
 from typing import Tuple
 

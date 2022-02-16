@@ -4,6 +4,12 @@ from keras.layers import Conv2D, Dense, Flatten, MaxPooling2D, Resizing
 
 class ImageRegressionModel(Model):
     def __init__(self, num_target=4, img_size:tuple=(128,128)):
+        """
+        Base Model for image regression
+
+        :param num_target: Number of target features as an output 1D vector
+        :param img_size: Height x Width of input image.
+        """
         super().__init__()
         self.preprocess_resize = Resizing(*img_size, crop_to_aspect_ratio=True)
         self.conv_1 = Conv2D(32, (3, 3), activation='relu', input_shape=(128, 128, 1))
@@ -36,8 +42,8 @@ if __name__ == "__main__":
     from src.utils.loader import get_image_paths_from_dir, RegressionDataLoader
     num_train = 800
 
-    img_data_dir = "../../dataset/20220209/images"
-    target_data_path = "../../dataset/20220209/images/targets.npy"
+    img_data_dir = "../../../dataset/20220209/images"
+    target_data_path = "../../../dataset/20220209/images/targets.npy"
 
     img_paths = get_image_paths_from_dir(img_data_dir)
     random.Random(1337).shuffle(img_paths)
