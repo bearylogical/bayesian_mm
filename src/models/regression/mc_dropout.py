@@ -15,7 +15,7 @@ class MCDropoutRegression(Model):
 
         self.length_scale = 1e-2
         self.decay = decay
-        self.tau = np.divide(self.length_scale * (self.length_scale ** 2), 2 * batch_size * self.decay)
+        self.tau = np.divide((1-dropout_rate) * (self.length_scale ** 2), 2 * batch_size * self.decay)
 
         self.preprocess_resize = Resizing(*img_size, crop_to_aspect_ratio=True)
         self.conv_1 = Conv2D(32, (3, 3), activation='relu', input_shape=(128, 128, 1), kernel_regularizer=L2(self.tau))
