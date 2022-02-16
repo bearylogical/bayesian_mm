@@ -4,7 +4,7 @@ from keras.regularizers import L2
 import numpy as np
 
 
-class DropOutImageRegression(Model):
+class MCDropoutRegression(Model):
     def __init__(self,
                  num_target=4,
                  img_size: tuple = (128, 128),
@@ -41,7 +41,7 @@ class DropOutImageRegression(Model):
         return self.dense3(x)
 
 
-def predict_mean_var(model: DropOutImageRegression, num_passes: int, input_data):
+def predict_mean_var(model: MCDropoutRegression, num_passes: int, input_data):
     """
     Return predictions with mean and variance
     :return:
