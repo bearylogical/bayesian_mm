@@ -1,6 +1,7 @@
 from tensorflow.keras import Input
 from tensorflow.keras.optimizers import Adam
 from tensorflow.keras.optimizers.schedules import ExponentialDecay
+from tensorflow.keras.callbacks import ModelCheckpoint
 from src.utils.loader import RegressionDataLoaderT1
 from src.models.cnn_regression import ImageRegressionModel
 from wandb.keras import WandbCallback
@@ -92,7 +93,7 @@ def train(experiment_name: Union[str, None] = "DefaultProject", task="T1", **kwa
     initial_learning_rate = 0.001
     lr_schedule = ExponentialDecay(
         initial_learning_rate,
-        decay_steps=1000,
+        decay_steps=100,
         decay_rate=0.96,
         staircase=True)
     optimizer = Adam(learning_rate=lr_schedule)
@@ -109,12 +110,26 @@ def train(experiment_name: Union[str, None] = "DefaultProject", task="T1", **kwa
     imgress = build_model(is_summary=True, img_size=img_size)
     logger.info("Compiling model for training")
     imgress.compile(optimizer=optimizer, loss='mse')
-    imgress.fit(train_gen, batch_size=batch_size, validation_data=test_gen, epochs=epochs,
-                callbacks=[WandbCallback(),  # using WandbCallback to log default metrics.
-                           LRLogger(optimizer)])  # using callback to log learning rate.
-
     model_save_path = kwargs.get('model_path', Path.cwd() / 'models')
     model_save_path = Path(model_save_path) / (experiment_name + "_" + strftime("%Y%m%d_%H%M"))
+
+    # checkpoint saving
+    save_every = 50
+    model_checkpoint_path = model_save_path / 'checkpoint'
+    model_checkpoint_callback = ModelCheckpoint(
+                                filepath=model_checkpoint_path,
+                                save_freq=save_every,
+                                save_weights_only=True,
+                                monitor='val_accuracy',
+                                mode='max',
+                                save_best_only=True)
+
+    imgress.fit(train_gen, batch_size=batch_size, validation_data=test_gen, epochs=epochs,
+                callbacks=[WandbCallback(),  # using WandbCallback to log default metrics.
+                           LRLogger(optimizer),
+                           model_checkpoint_callback])  # using callback to log learning rate.
+
+
     logger.debug(f"Model Saving to {model_save_path}")
     model_save_path.mkdir(parents=True, exist_ok=True)
     imgress.save(model_save_path)
