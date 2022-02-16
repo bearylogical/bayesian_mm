@@ -8,6 +8,7 @@ from tensorflow.keras.preprocessing.image import load_img, img_to_array
 from typing import List, Tuple, Union
 from PIL import Image
 from pathlib import Path
+
 VALID_TASKS = ["T0", "T1"]
 
 
@@ -22,11 +23,20 @@ class DataLoaderError(Exception):
 
 class BaseDataLoader(Sequence):
     def __init__(self,
-                 batch_size,
-                 img_size,
-                 input_img_paths,
-                 target_paths,
-                 is_rgb=False):
+                 batch_size: int,
+                 img_size: Tuple[int, int],
+                 input_img_paths: List[Union[Path, str]],
+                 target_paths: Union[List[Union[Path, str]], Union[Path, str]],
+                 is_rgb: bool = False):
+        """
+        Base class for Data Loaders
+
+        :param batch_size: Number of batches.
+        :param img_size: height x width  of input img
+        :param input_img_paths: List of image paths
+        :param target_paths: Can be a list of target paths (for classification/segmentation) or a single target path (for regression)
+        :param is_rgb:
+        """
         self.batch_size = batch_size
         self.img_size = img_size
         self.input_img_paths = input_img_paths
@@ -50,7 +60,8 @@ class BaseDataLoader(Sequence):
 
 
 class BaseRegressionDataLoader(BaseDataLoader):
-    def __init__(self, batch_size, img_size, input_img_paths, target_paths, num_targets=4,task: str = "T1", fields=None):
+    def __init__(self, batch_size, img_size, input_img_paths, target_paths, num_targets=4, task: str = "T1",
+                 fields=None):
         super().__init__(batch_size, img_size, input_img_paths, target_paths)
         self.target_data_path = target_paths
         self.num_targets = num_targets
@@ -88,8 +99,8 @@ class RegressionDataLoaderT0(BaseRegressionDataLoader):
 
 
 class RegressionDataLoaderT1(BaseRegressionDataLoader):
-    def __init__(self, batch_size, img_size, input_img_paths, target_paths, num_targets=4,task=None, fields=None,
-                 normalize: bool = True ):
+    def __init__(self, batch_size, img_size, input_img_paths, target_paths, num_targets=4, task=None, fields=None,
+                 normalize: bool = True):
         super().__init__(batch_size, img_size, input_img_paths, target_paths, fields, task)
         self.num_targets = num_targets
         self.normalize = normalize
@@ -178,6 +189,7 @@ def get_target_data_from_idx(data: np.ndarray, img_idx: int, include_idx=False,
     """
     Returns a tuple containing the target data
     :param data: Structured np.ndarray as input
+
     :param img_idx: Index of image that data is being requested for
     :param include_idx: Bool. If true, includes the idx value which is always at the start of the array.
     :param fields: Data fields to include. Defaults to None. When include_idx is included, all the rows are returned as
@@ -194,11 +206,13 @@ def get_target_data_from_idx(data: np.ndarray, img_idx: int, include_idx=False,
         return f_data[fields].item()
 
 
-def get_img_target_data(img_path: Union[str, Path], data_path: Union[str, Path], img_size: Union[Tuple[int, int] , None]=None, task: str = "T1", include_idx=False) -> \
+def get_img_target_data(img_path: Union[str, Path], data_path: Union[str, Path],
+                        img_size: Union[Tuple[int, int], None] = None, task: str = "T1", include_idx=False) -> \
         Tuple[Image.Image, dict]:
     """
     Returns a tuple containing the Image as a PIL instance and a dictionary
     with the field property as key and its associated value.
+
     :param task: Refer to Prediction Task document
     :param img_size: Size of the image (Int, Int)
     :param img_path: Path of the image file
@@ -226,6 +240,7 @@ def get_img_target_data(img_path: Union[str, Path], data_path: Union[str, Path],
 def _get_img_seg_path(src_dir: str, img_dir_name: str = "images", segment_dir_name: str = "segment"):
     """
     Gets the directory of the image and segments
+
     :param src_dir:
     :param img_dir_name:
     :param segment_dir_name:
@@ -248,9 +263,16 @@ def _get_img_seg_path(src_dir: str, img_dir_name: str = "images", segment_dir_na
 
 
 def get_pairs_from_paths(images_path: str, segs_path: str, ignore_non_match: bool = True) -> Tuple[List, List]:
-    """ Find all the images from the images_path directory and
-        the segmentation images from the segs_path directory
-        while checking integrity of data """
+    """
+    Find all the images from the images_path directory and
+    the segmentation images from the segs_path directory
+    while checking integrity of data
+
+    :param images_path:
+    :param segs_path:
+    :param ignore_non_match:
+    :return:
+    """
 
     image_files = []
     seg_files = []
