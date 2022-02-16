@@ -2,8 +2,9 @@ from tensorflow.keras import Input
 from tensorflow.keras.optimizers import Adam
 from tensorflow.keras.optimizers.schedules import ExponentialDecay
 from tensorflow.keras.callbacks import ModelCheckpoint
+from keras import Model
 from src.utils.loader import RegressionDataLoaderT1
-from src.models.cnn_regression import ImageRegressionModel
+from src.models.regression.cnn_regression import ImageRegressionModel
 from wandb.keras import WandbCallback
 from src.utils.experiment import LRLogger
 import wandb
@@ -48,10 +49,11 @@ def train_test_split(training_pct, img_dir, data_loader, **kwargs):
     return train_gen, test_gen
 
 
-def build_model(is_summary: bool = False, img_size: tuple = (128, 128)):
+def build_model(is_summary: bool = False, img_size: tuple = (128, 128),
+                model: Model = ImageRegressionModel):
     logger.info("Creating Model")
     model_input = Input((128, 128, 1))
-    imgress = ImageRegressionModel(14, img_size=img_size)
+    imgress = model(14, img_size=img_size)
     imgress.build(input_shape=(None, 128, 128, 1))
     if is_summary:
         imgress.call(model_input)
@@ -69,6 +71,7 @@ def train(experiment_name: Union[str, None] = "DefaultProject", task="T1", **kwa
     training_pct = kwargs.get('training_pct', .8)
     img_size = kwargs.get('img_size', (128, 128))
     epochs = kwargs.get('epochs', 10)
+    model = kwargs.get('model', None)
 
     img_save_dir = generate_data(num_samples)
     data_path = img_save_dir / 'targets.npz'
@@ -117,18 +120,17 @@ def train(experiment_name: Union[str, None] = "DefaultProject", task="T1", **kwa
     save_every = 50
     model_checkpoint_path = model_save_path / 'checkpoint'
     model_checkpoint_callback = ModelCheckpoint(
-                                filepath=model_checkpoint_path,
-                                save_freq=save_every,
-                                save_weights_only=True,
-                                monitor='val_accuracy',
-                                mode='max',
-                                save_best_only=True)
+        filepath=model_checkpoint_path,
+        save_freq=save_every,
+        save_weights_only=True,
+        monitor='val_accuracy',
+        mode='max',
+        save_best_only=True)
 
     imgress.fit(train_gen, batch_size=batch_size, validation_data=test_gen, epochs=epochs,
                 callbacks=[WandbCallback(),  # using WandbCallback to log default metrics.
                            LRLogger(optimizer),
                            model_checkpoint_callback])  # using callback to log learning rate.
-
 
     logger.debug(f"Model Saving to {model_save_path}")
     model_save_path.mkdir(parents=True, exist_ok=True)
