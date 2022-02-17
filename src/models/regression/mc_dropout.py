@@ -10,12 +10,13 @@ class MCDropoutRegression(Model):
                  img_size: tuple = (128, 128),
                  dropout_rate: float = 0.5,
                  decay: float = 1.0,
-                 batch_size: int = 20):
+                 batch_size: int = 20,
+                 length_scale: int = 100):
         super().__init__()
 
-        self.length_scale = 1e-2
+        self.length_scale = length_scale
         self.decay = decay
-        self.tau = np.divide((1-dropout_rate) * (self.length_scale ** 2), 2 * batch_size * self.decay)
+        self.tau = np.divide((1 - dropout_rate) * (self.length_scale ** 2), 2 * batch_size * self.decay)
 
         self.preprocess_resize = Resizing(*img_size, crop_to_aspect_ratio=True)
         self.conv_1 = Conv2D(32, (3, 3), activation='relu', input_shape=(128, 128, 1), kernel_regularizer=L2(self.tau))
