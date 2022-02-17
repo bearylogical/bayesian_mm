@@ -2,12 +2,14 @@ from tensorflow.keras import Input
 from tensorflow.keras.optimizers import Adam
 from tensorflow.keras.optimizers.schedules import ExponentialDecay
 from tensorflow.keras.callbacks import ModelCheckpoint
+from tensorflow.keras.models import load_model as load_keras_model
 from keras import Model
 from src.utils.loader import RegressionDataLoaderT1
 from src.models.regression.cnn_regression import ImageRegressionModel
 from wandb.keras import WandbCallback
 from src.utils.experiment import LRLogger
 import wandb
+from pathlib import Path
 import os
 from functools import partial
 from typing import Union
@@ -71,6 +73,8 @@ def build_model(is_summary: bool = False, img_size: tuple = (128, 128),
 
     return imgress
 
+def load_model(model_path:Union[str, Path]):
+    return load_keras_model(model_path)
 
 def train(experiment_name: Union[str, None] = "DefaultProject", task="T1", **kwargs):
     from pathlib import Path
@@ -133,7 +137,7 @@ def train(experiment_name: Union[str, None] = "DefaultProject", task="T1", **kwa
         filepath=model_checkpoint_path,
         save_freq=save_every,
         save_weights_only=True,
-        monitor='val_accuracy',
+        monitor='val_loss',
         mode='max',
         save_best_only=True)
 
