@@ -4,12 +4,13 @@ import os.path
 from PIL.ImageOps import autocontrast
 import matplotlib.pyplot as plt
 import matplotlib as mpl
+from matplotlib.patches import Rectangle
 import tensorflow as tf
 import cv2
 import numpy as np
 from src.utils.loader import get_img_target_data
 from PIL import Image
-from typing import Union, List
+from typing import Union, List, Tuple
 
 
 def display_mask(mask):
@@ -68,18 +69,65 @@ def get_figsize(height, width):
     return height / dpi, width / dpi
 
 
-def display_img_coords(img: Image.Image, coords: np.ndarray, marker_size=2, marker_color='red'):
-    """
-    Viewer for overlaying target coords over src image
-    :param img:
-    :param coords:
-    :return:
-    """
-    coords = coords.reshape(7, 2)
+def get_bb_box_outputs(coords: Union[Tuple[int], np.ndarray]):
+    if isinstance(coords, np.ndarray):
+        assert coords.shape == (4,)
+
+    w = abs(coords[0] - coords[2])
+    h = abs(coords[1] - coords[3])
+
+    return coords[:2], w , -h
+
+
+def display_composite(img: Image.Image,
+                      bb_box_coords: Union[Tuple[int], np.ndarray],
+                      coords: Union[np.ndarray, None],
+                      marker_size:int=2,
+                      marker_color='red'):
     fig = plt.figure(figsize=get_figsize(*img.size))
     ax = fig.add_axes([0, 0, 1, 1])
     ax.imshow(img, origin='lower', cmap='gray', aspect='auto')
+    xy, width, height = get_bb_box_outputs(bb_box_coords)
+    rect = Rectangle(xy, width, height, fill=False, linewidth=1)
+
+    ax.add_patch(rect)
+    coords = coords.reshape(7, 2)
     ax.scatter(coords[:, 0], coords[:, 1], s=marker_size, c=marker_color)
+    plt.axis('off')
+    plt.show()
+
+
+def display_img_coords(img: Image.Image,
+                       true_coords: Union[np.ndarray, None] = None,
+                       pred_coords: Union[np.ndarray, None] = None,
+                       marker_size=2,
+                       true_marker_color='red',
+                       pred_marker_color='green'):
+    """
+    Viewer for overlaying target coords over src image
+    :param pred_marker_color:
+    :param true_marker_color:
+    :param marker_size:
+    :param pred_coords:
+    :param true_coords:
+    :param img:
+    :return:
+    """
+
+    true_coords = true_coords.reshape(7, 2)
+
+    if true_coords and pred_coords is None:
+        raise Exception('No coords supplied!')
+
+    fig = plt.figure(figsize=get_figsize(*img.size))
+    ax = fig.add_axes([0, 0, 1, 1])
+    ax.imshow(img, origin='lower', cmap='gray', aspect='auto')
+    ax.scatter(true_coords[:, 0], true_coords[:, 1], s=marker_size, c=true_marker_color)
+
+    if pred_coords is not None:
+        pred_coords = pred_coords.reshape(7, 2)
+        ax.scatter(pred_coords[:, 0], pred_coords[:, 1], s=marker_size, c=pred_marker_color)
+
     plt.axis('off')
     plt.show()
 
@@ -87,12 +135,14 @@ def display_img_coords(img: Image.Image, coords: np.ndarray, marker_size=2, mark
 if __name__ == "__main__":
     from pathlib import Path
 
-    img_path = Path('dataset/20220213/images')
+    img_path = Path('dataset/20220222/images/train')
     data_path = img_path / 'targets.npz'
-    sample_img = img_path / '00000.png'
+    sample_img = img_path / '01.png'
 
     from src.utils.loader import get_img_target_data
 
-    t_img, data = get_img_target_data(sample_img, data_path)
+    t_img, data = get_img_target_data(sample_img, data_path, task="T1")
+    _, bb_data = get_img_target_data(sample_img, data_path, task="T2")
     t_coords = np.array([v for v in data.values()])
-    display_img_coords(t_img, t_coords)
+    bb_data = np.array([v for v in bb_data.values()])
+    display_composite(t_img, bb_box_coords=bb_data, coords=t_coords)
