@@ -26,35 +26,36 @@ ch = logging.StreamHandler()
 logger.addHandler(ch)
 
 
-def generate_data(num_samples: int = 10):
+def generate_data(num_samples: int = 10, training_pct: float = 0.8):
     from src.utils.shapes.capillary import CapillaryImageGenerator
     logger.info("Creating Images")
-    cap = CapillaryImageGenerator(num_images=num_samples)
+    cap = CapillaryImageGenerator(num_images=num_samples, train_test_ratio=training_pct)
 
     _, _, files = next(os.walk(cap.save_img_dir))
     if len(files) != num_samples + 1:
         logger.debug("No samples detected, creating images")
-        logger.debug(f"{num_samples} images created at {cap.save_img_dir}")
         cap.generate()
+        logger.debug(f"{num_samples} images created at {cap.save_img_dir}")
     else:
         logger.info("samples detected. reusing existing saved dir")
 
-    return cap.save_img_dir
+    return cap.train_dir, cap.test_dir
 
 
-def train_test_split(training_pct, img_dir, data_loader, **kwargs):
+def train_test_split(train_img_dir, test_img_dir, data_loader, **kwargs):
     from src.utils.loader import get_image_paths_from_dir
     import random
-    logger.info("Generating Train Test Split")
-    img_paths = get_image_paths_from_dir(img_dir)
-    random.Random(1337).shuffle(img_paths)  # shuffle our dataset accordingly
-    num_train = int(training_pct * len(img_paths))
-    logger.debug(f"{len(img_paths)} Image Samples, {num_train}/{len(img_paths) - num_train} Train/Test")
-    train_img_paths = img_paths[:num_train]
-    test_img_paths = img_paths[num_train:]
+    logger.info("Allocating Data Loaders")
 
-    train_gen = data_loader(input_img_paths=train_img_paths, **kwargs)
-    test_gen = data_loader(input_img_paths=test_img_paths, **kwargs)
+    train_img_paths = get_image_paths_from_dir(train_img_dir)
+    test_img_paths = get_image_paths_from_dir(test_img_dir)
+
+    train_data_path = train_img_dir / 'targets.npz'
+    test_data_path = test_img_dir / 'targets.npz'
+    assert train_data_path.is_file() and test_data_path.is_file()
+
+    train_gen = data_loader(input_img_paths=train_img_paths, target_paths=train_data_path, **kwargs)
+    test_gen = data_loader(input_img_paths=test_img_paths, target_paths=test_data_path, **kwargs)
     logger.debug("Data Loaders created")
     return train_gen, test_gen
 
@@ -81,26 +82,25 @@ def train(experiment_name: Union[str, None] = "DefaultProject", task="T1", **kwa
     from time import strftime
 
     num_samples = kwargs.get('num_samples', 10)
-    batch_size = 5 if num_samples // 50 < 0 else 50
+    batch_size = kwargs.get('batch_size', 50)
     training_pct = kwargs.get('training_pct', .8)
     img_size = kwargs.get('img_size', (128, 128))
     epochs = kwargs.get('epochs', 10)
     model = kwargs.get('model', None)
+    normalize = kwargs.get('normalize', False)
 
-    img_save_dir = generate_data(num_samples)
-    data_path = img_save_dir / 'targets.npz'
-    assert data_path.is_file()
+    train_image_dir, test_image_dir = generate_data(num_samples, training_pct)
 
     if task == "T1":
         NUM_TARGETS = 14
     else:
         NUM_TARGETS = 4
 
-    gen_kwargs = dict(target_paths=data_path, num_targets=NUM_TARGETS,
+    gen_kwargs = dict(num_targets=NUM_TARGETS,
                       batch_size=batch_size, img_size=img_size,
-                      task=task)
-    train_gen, test_gen = train_test_split(training_pct, img_save_dir,
-                                           partial(RegressionDataLoaderT1, normalize=False),
+                      task=task,normalize=normalize)
+    train_gen, test_gen = train_test_split(train_image_dir, test_image_dir,
+                                           RegressionDataLoaderT1,
                                            **gen_kwargs)
 
     # experiment tracking
@@ -120,7 +120,7 @@ def train(experiment_name: Union[str, None] = "DefaultProject", task="T1", **kwa
         "epochs": epochs,
         "batch_size": batch_size,
         "img_size": img_size,
-
+        "normalize" : normalize
     })
 
     # retrieve model

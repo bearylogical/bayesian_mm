@@ -14,7 +14,9 @@ class ImageGenerator:
     def __init__(self, save_dir: Union[None, Path] = None,
                  dim: Tuple[int, int] = (128, 128),
                  seed: Union[None, int] = None,
-                 is_segment: bool = False):
+                 is_segment: bool = False,
+                 is_train_split: bool = True,
+                 train_test_ratio: Union[float, None] = None):
         # TODO: Move this implementation to another method instead of running on initialisation
         if save_dir is None:  # initialise save dir as current date ISO8601 YYYYMMDD format
             temp_dir = Path.cwd() / 'dataset' / strftime("%Y%m%d")
@@ -32,6 +34,15 @@ class ImageGenerator:
 
         self.save_img_dir = self.save_dir / 'images'
         self.save_img_dir.mkdir(exist_ok=True)
+
+        if is_train_split or train_test_ratio is not None:
+            self.train_dir = self.save_img_dir / 'train'
+            self.test_dir = self.save_img_dir / 'test'
+
+            self.train_dir.mkdir(exist_ok=True)
+            self.test_dir.mkdir(exist_ok=True)
+            self.train_test_ratio = 0.8 if train_test_ratio is None else train_test_ratio
+            self.is_train_split = is_train_split
 
         self.dim = dim
 

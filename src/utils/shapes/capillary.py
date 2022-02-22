@@ -300,6 +300,15 @@ class CapillaryImageGenerator(ImageGenerator):
                                   available_taper_c1_dist)
         selected_params = random.sample(list(parameter_space), self.num_images)
         # initialise our results array : [idx, lband, rband, vol, theta]
+        if self.is_train_split:
+            num_train = int(self.train_test_ratio * self.num_images)
+            train_params = selected_params[:num_train]
+            test_params = selected_params[num_train:]
+
+            self._generate_image(train_params, self.train_dir)
+            self._generate_image(test_params, self.test_dir)
+
+    def _generate_image(self, selected_params: list, save_dir: Path):
         idx_dtype = ('idx', 'i4')
         T0_dtypes = [idx_dtype, ('l_band', 'f4'), ('r_band', 'f4'),
                      ('volume', 'f4'), ('theta', 'f4')]
