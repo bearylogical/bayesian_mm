@@ -74,15 +74,17 @@ def build_model(is_summary: bool = False, img_size: tuple = (128, 128),
 
     return imgress
 
-def load_model(model_path:Union[str, Path]):
+
+def load_model(model_path: Union[str, Path]):
     return load_keras_model(model_path)
+
 
 def train(experiment_name: Union[str, None] = "DefaultProject", task="T1", **kwargs):
     from pathlib import Path
     from time import strftime
 
     num_samples = kwargs.get('num_samples', 10)
-    batch_size = kwargs.get('batch_size', 50)
+    batch_size = kwargs.get('batch_size', 10)
     training_pct = kwargs.get('training_pct', .8)
     img_size = kwargs.get('img_size', (128, 128))
     epochs = kwargs.get('epochs', 10)
@@ -98,7 +100,7 @@ def train(experiment_name: Union[str, None] = "DefaultProject", task="T1", **kwa
 
     gen_kwargs = dict(num_targets=NUM_TARGETS,
                       batch_size=batch_size, img_size=img_size,
-                      task=task,normalize=normalize)
+                      task=task, normalize=normalize)
     train_gen, test_gen = train_test_split(train_image_dir, test_image_dir,
                                            RegressionDataLoaderT1,
                                            **gen_kwargs)
@@ -120,7 +122,7 @@ def train(experiment_name: Union[str, None] = "DefaultProject", task="T1", **kwa
         "epochs": epochs,
         "batch_size": batch_size,
         "img_size": img_size,
-        "normalize" : normalize
+        "normalize": normalize
     })
 
     # retrieve model
