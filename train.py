@@ -31,8 +31,11 @@ def generate_data(num_samples: int = 10, training_pct: float = 0.8):
     logger.info("Creating Images")
     cap = CapillaryImageGenerator(num_images=num_samples, train_test_ratio=training_pct)
 
-    _, _, files = next(os.walk(cap.save_img_dir))
-    if len(files) != num_samples + 1:
+    num_train = int(training_pct * num_samples)
+    num_test = training_pct - num_train
+    _, _, train_files = next(os.walk(cap.train_dir))
+    _, _, test_files = next(os.walk(cap.test_dir))
+    if len(train_files) != num_train + 1 and len(test_files) != num_test + 1:
         logger.debug("No samples detected, creating images")
         cap.generate()
         logger.debug(f"{num_samples} images created at {cap.save_img_dir}")
