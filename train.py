@@ -1,7 +1,7 @@
 from tensorflow.keras import Input
 from tensorflow.keras.optimizers import Adam
 from tensorflow.keras.optimizers.schedules import ExponentialDecay
-from tensorflow.keras.callbacks import ModelCheckpoint
+from tensorflow.keras.callbacks import ModelCheckpoint, EarlyStopping
 from tensorflow.keras.models import load_model as load_keras_model
 from keras import Model
 from src.utils.loader import RegressionDataLoaderT1
@@ -143,10 +143,21 @@ def train(experiment_name: Union[str, None] = "DefaultProject", task="T1", **kwa
         mode='max',
         save_best_only=True)
 
+    early_stopping = EarlyStopping(
+        monitor="val_loss",
+        min_delta=0,
+        patience=5,
+        verbose=0,
+        mode="auto",
+        baseline=None,
+        restore_best_weights=True,
+    )
+
     imgress.fit(train_gen, batch_size=batch_size, validation_data=test_gen, epochs=epochs,
                 callbacks=[WandbCallback(),  # using WandbCallback to log default metrics.
                            LRLogger(optimizer),
-                           model_checkpoint_callback])  # using callback to log learning rate.
+                           model_checkpoint_callback,
+                           early_stopping])  # using callback to log learning rate.
 
     logger.debug(f"Model Saving to {model_save_path}")
     model_save_path.mkdir(parents=True, exist_ok=True)
