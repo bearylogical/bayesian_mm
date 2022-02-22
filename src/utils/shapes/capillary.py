@@ -42,6 +42,7 @@ class CapillaryImage:
         :param img_size:
         :param is_deg:
         """
+        self.bounding_box = None
         self.coords = None
         self.volume = None
         self.r_band = None
@@ -207,6 +208,10 @@ class CapillaryImage:
         x5 = (b1_x2, b1_y2)
         x6 = (b2_x2, b2_y2)
 
+        # for bounding box
+        x_min, y_min = b1_x2 , b2_y1
+        x_max, y_max = b2_x2 , b2_y3
+
         coords = {
             "L1": (x_L1, y_L1),
             "L2": (x_L2, y_L2),
@@ -215,6 +220,7 @@ class CapillaryImage:
             "EL": (x_v, y_v),
             "B3": (b3_xf, b3_yf),
             "T1": np.array([x0, x1, x2, x3, x4, x5, x6]).flatten(),
+            "T2": np.array([x_min, y_min, x_max, y_max]).flatten(),
             "data":
                 dict(r_band=r_band, l_band=l_band, volume=volume)
         }
@@ -253,6 +259,7 @@ class CapillaryImage:
         self.r_band = coords["data"]["r_band"]
         self.volume = coords["data"]["volume"]
         self.coords = coords["T1"]
+        self.bounding_box = coords["T2"]
 
         draw = ImageDraw.Draw(img)
         draw.polygon(list(np.ravel(coords_EL, 'F')),
@@ -317,9 +324,13 @@ class CapillaryImageGenerator(ImageGenerator):
         T1_coords = [[(f'x{x}', 'i4'), (f'y{x}', 'i4')] for x in range(7)]
         T1_dtypes.extend(list(chain.from_iterable(T1_coords)))
 
+        T2_dtypes = [idx_dtype , (f'x_min', 'i4'), (f'y_min', 'i4'),(f'x_max', 'i4'), (f'y_max', 'i4')]
+
         res_T0 = np.zeros(len(selected_params),
                           dtype=T0_dtypes)
         res_T1 = np.zeros(len(selected_params), dtype=T1_dtypes)
+        res_T2 = np.zeros(len(selected_params), dtype=T2_dtypes)
+
         for idx, param in enumerate(tqdm(selected_params)):
             capillary = CapillaryImage(yx_r=param[0],
                                        l_band=param[1],
@@ -337,8 +348,10 @@ class CapillaryImageGenerator(ImageGenerator):
 
             res_T1[idx] = np.array([(idx, *capillary.coords)], dtype=T1_dtypes)
 
+            res_T2[idx] = np.array([(idx, *capillary.bounding_box)], dtype=T2_dtypes)
+
         res_fp = str(save_dir / 'targets')
-        np.savez(res_fp, T0=res_T0, T1=res_T1, allow_pickle=False)
+        np.savez(res_fp, T0=res_T0, T1=res_T1, T2=res_T2, allow_pickle=False)
 
 
 def _calc_vol(r1, r2, b1, b2, l_band):
