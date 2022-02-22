@@ -116,7 +116,7 @@ def display_img_coords(img: Image.Image,
 
     true_coords = true_coords.reshape(7, 2)
 
-    if true_coords and pred_coords is None:
+    if true_coords is None and pred_coords is None:
         raise Exception('No coords supplied!')
 
     fig = plt.figure(figsize=get_figsize(*img.size))
