@@ -317,9 +317,9 @@ class CapillaryImageGenerator(ImageGenerator):
         T1_coords = [[(f'x{x}', 'i4'), (f'y{x}', 'i4')] for x in range(7)]
         T1_dtypes.extend(list(chain.from_iterable(T1_coords)))
 
-        res_T0 = np.zeros(self.num_images,
+        res_T0 = np.zeros(len(selected_params),
                           dtype=T0_dtypes)
-        res_T1 = np.zeros(self.num_images, dtype=T1_dtypes)
+        res_T1 = np.zeros(len(selected_params), dtype=T1_dtypes)
         for idx, param in enumerate(tqdm(selected_params)):
             capillary = CapillaryImage(yx_r=param[0],
                                        l_band=param[1],
@@ -328,7 +328,7 @@ class CapillaryImageGenerator(ImageGenerator):
             temp_image = Image.new(mode='L', size=capillary.dim, color=255)
             capillary.generate_image(temp_image, is_annotate=False)
 
-            img_fp = str(save_dir / str(idx).zfill(len(str(self.num_images)))) + '.png'
+            img_fp = str(save_dir / str(idx).zfill(len(str(len(selected_params))))) + '.png'
 
             # plt.autoscale(tight=True)
             temp_image.save(img_fp)
