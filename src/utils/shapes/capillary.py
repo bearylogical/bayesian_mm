@@ -1,17 +1,14 @@
 import random
-
+from PIL import Image, ImageDraw
 from src.utils.shapes.shapes import ImageGenerator, \
     get_bezier_parameters, \
     bezier_curve
-from src.utils.viewer import get_figsize
-import numpy as np
-from skimage.draw import line
-from typing import Tuple, Union, Dict
-import matplotlib.pyplot as plt
-from matplotlib.patches import Polygon
-from matplotlib.axes import Axes
-from matplotlib.image import imsave
 from itertools import product, chain
+import numpy as np
+from skimage.draw import line, circle_perimeter
+from typing import Tuple, Union, Dict
+from pathlib import Path
+import matplotlib.pyplot as plt
 from tqdm import tqdm
 import random
 
@@ -45,6 +42,9 @@ class CapillaryImage:
         :param img_size:
         :param is_deg:
         """
+        self.coords = None
+        self.volume = None
+        self.r_band = None
         self.theta = theta
         self.yx_r = yx_r
         self.taper_dist = taper_dist
@@ -61,14 +61,16 @@ class CapillaryImage:
         self.taper_to_c1_dist_min = 30
         self.l_b_min = 5
         self.l_band_min = 0  # including
+        self.capillary_close_depth = 5
 
         self._check_bounds()
 
         # image stuff
         self.figsize = (10, 10)
-        self.fill_alpha_inner = 0.03  # alpha (transparency) for the "confined" ellipsoid
-        self.fill_alpha_outer = 0.5
-        self.capillary_line_width = 3
+        self.fill_alpha_inner = 0.9  # alpha (transparency) for the "confined" ellipsoid # 1 is full
+        self.fill_alpha_outer = 0.3
+        self.fill_line = 1
+        self.capillary_line_width = 2
 
     def _check_bounds(self):
         # check for theta (if deg or rad and convert appropriately)
@@ -102,7 +104,8 @@ class CapillaryImage:
                             l_b2: int = 20,
                             l_band: int = 35,
                             taper_cutoff: int = 120,
-                            img_size: Tuple[int, int] = (400, 400)) -> Dict:
+                            capillary_close_depth: int = 5,
+                            img_size: Tuple[int, int] = (400, 400), ) -> Dict:
         """
 
         :rtype: Dict
@@ -117,31 +120,45 @@ class CapillaryImage:
 
         # b1, b2 are the curvatures that define our particle interfaces
         # points for b1
-        b1_x1 = x_r + v1_c1
+        b1_x1 = x_r + v1_c1  # center of circle (x-coord)
+        b1_y1 = y_L1[x_L1 == b1_x1][0]
         # b1_x1 = np.divide(r_band, np.tan(theta)) - l_band / 2
-        b1_y1 = y_r + np.tan(theta) * v1_c1
-        b1_x2 = b1_x1 - l_b1
-        b1_y2 = y_r
+        # b1_radius = int(np.tan(theta) * v1_c1)
+        b1_radius = b1_y1 - y_r
+        # b1_y1 = y_r + b1_radius
+        b1_x2 = b1_x1 - b1_radius  # edge of circle (x-coord)
+        b1_y2 = y_r  # edge of circle (y-coord)
         b1_x3 = b1_x1
-        b1_y3 = y_r - np.tan(theta) * v1_c1
-        b1_x = [b1_x1, b1_x2, b1_x3]
-        b1_y = [b1_y1, b1_y2, b1_y3]
-        # generate bezier fit
-        b1_p = get_bezier_parameters(b1_x, b1_y, degree=2)
-        b1_xf, b1_yf = bezier_curve(b1_p, n_times=50)
+        b1_y3 = y_L2[x_L2 == b1_x1][0]
+        # b1_x = [b1_x1, b1_x2, b1_x3]
+        # b1_y = [b1_y1, b1_y2, b1_y3]
+        # generate circle coods
+        b1_ry, b1_cx = circle_perimeter(b1_y2, b1_x1, b1_radius, shape=img_size)
+        # indices of half circle
+        b1_mask = b1_cx <= b1_x1
+        b1_xf, b1_yf = b1_cx[b1_mask], b1_ry[b1_mask]
+        # b1_p = get_bezier_parameters(b1_x, b1_y, degree=2)
+        # b1_xf, b1_yf = bezier_curve(b1_p, n_times=50)
 
         # points for b2
         b2_x1 = b1_x1 + l_band
-        b2_y1 = y_r + np.tan(theta) * (l_band + v1_c1)
-        b2_x2 = b2_x1 + l_b2
+        b2_y1 = y_L1[x_L1 == b2_x1][0]
+        # b2_radius = int(np.tan(theta) * (l_band + v1_c1))
+        b2_radius = b2_y1 - y_r
+        # b2_y1 = y_r + b2_radius
+        b2_x2 = b2_x1 + b2_radius
         b2_y2 = y_r
         b2_x3 = b2_x1
-        b2_y3 = y_r - np.tan(theta) * (l_band + v1_c1)
-        b2_x = [b2_x1, b2_x2, b2_x3]
-        b2_y = [b2_y1, b2_y2, b2_y3]
-        # generate bezier fit
-        b2_p = get_bezier_parameters(b2_x, b2_y, degree=2)
-        b2_xf, b2_yf = bezier_curve(b2_p, n_times=50)
+        b2_y3 = y_L2[x_L2 == b2_x1][0]
+        # b2_x = [b2_x1, b2_x2, b2_x3]
+        # b2_y = [b2_y1, b2_y2, b2_y3]
+        # generate circle coords
+        b2_ry, b2_cx = circle_perimeter(b2_y2, b2_x1, b2_radius, shape=img_size)
+        # indices of half circle
+        b2_mask = b2_cx >= b2_x1
+        b2_xf, b2_yf = b2_cx[b2_mask], b2_ry[b2_mask]
+        # b2_p = get_bezier_parameters(b2_x, b2_y, degree=2)
+        # b2_xf, b2_yf = bezier_curve(b2_p, n_times=50)
 
         # some transformations to generate the taper cutoff
         if (taper_cutoff < (taper_dist + x_r)) | (taper_cutoff > b1_x2):
@@ -154,22 +171,25 @@ class CapillaryImage:
         # points for taper cutoff curvature
         b3_x1 = x_L1[0]
         b3_y1 = y_L1[0]
-        b3_x2 = b3_x1 - 10
+        b3_x2 = b3_x1 - capillary_close_depth
         b3_y2 = y_r
         b3_x3 = x_L1[0]
         b3_y3 = y_L2[0]
         b3_x = [b3_x1, b3_x2, b3_x3]
         b3_y = [b3_y1, b3_y2, b3_y3]
         # generate bezier fit
-        b3_p = get_bezier_parameters(b3_x, b3_y, degree=2)
-        b3_xf, b3_yf = bezier_curve(b3_p, n_times=20)
+        # b3_p = get_bezier_parameters(b3_x, b3_y, degree=2)
+        b3_xf, b3_yf = b3_x, b3_y
 
         # get geometry of deformed particle
+        # need to find intersection of x, y coord with line
         ind_def = (x_L1 >= b1_x1) & (x_L1 <= b2_x1)
         x_L1_v, y_L1_v = x_L1[ind_def], y_L1[ind_def]
         x_L2_v, y_L2_v = x_L2[ind_def], y_L2[ind_def]
-        x_v = np.concatenate([b1_xf, x_L1_v, np.flip(b2_xf), np.flip(x_L2_v)])
-        y_v = np.concatenate([b1_yf, y_L1_v, np.flip(b2_yf), np.flip(y_L2_v)])
+        b1_intersect = b1_xf <= min(x_L1_v)
+
+        x_v = np.concatenate([np.flip(b1_xf), x_L1_v, np.flip(b2_xf), np.flip(x_L2_v)])
+        y_v = np.concatenate([np.flip(b1_yf), y_L1_v, np.flip(b2_yf), np.flip(y_L2_v)])
 
         midpoint_x_polygon = b1_x1 + 0.5 * l_band
         r_band = np.round(np.tan(theta) * midpoint_x_polygon, 3)
@@ -201,13 +221,15 @@ class CapillaryImage:
 
         return coords
 
-    def generate_image(self, ax: Axes = None, is_annotate: bool = True):
+    def generate_image(self, img: Image.Image = None, is_annotate: bool = True):
         """
         Generate image onto supplied axes
-        :param ax: Axes to display image on
+        :param img: PIL image object
         :param is_annotate: bool, if True prints key info onto canvas
         :return: Nothing
         """
+        assert img is not None
+
         coords = self._generate_capillary(self.yx_r,
                                           self.theta,
                                           self.taper_dist,
@@ -216,6 +238,7 @@ class CapillaryImage:
                                           self.l_b2,
                                           self.l_band,
                                           self.taper_cutoff,
+                                          self.capillary_close_depth,
                                           self.dim)
 
         coords_L1 = coords["L1"]
@@ -231,49 +254,50 @@ class CapillaryImage:
         self.volume = coords["data"]["volume"]
         self.coords = coords["T1"]
 
-        ax.plot(coords_L1[0], coords_L1[1], color='k', label='L1', linewidth=self.capillary_line_width)
-        ax.plot(coords_L2[0], coords_L2[1], color='k', label='L2', linewidth=self.capillary_line_width)
-        ax.plot(coords_b3[0], coords_b3[1], color='k', linewidth=self.capillary_line_width)
-        # ax.plot(coords_b2[0], coords_b2[1], color='k')
-        ax.set_xlim(0, self.dim[0])
-        ax.set_ylim(0, self.dim[1])
-        trapped_particle_inner = Polygon(np.array([coords_EL[0], coords_EL[1]]).T,
-                                         fill=True,
-                                         closed=True,
-                                         facecolor='k',
-                                         alpha=self.fill_alpha_inner)
-        trapped_particle_outer = Polygon(np.array([coords_EL[0], coords_EL[1]]).T,
-                                         fill=False,
-                                         closed=True,
-                                         edgecolor='k',
-                                         linewidth=2,
-                                         alpha=self.fill_alpha_outer)
+        draw = ImageDraw.Draw(img)
+        draw.polygon(list(np.ravel(coords_EL, 'F')),
+                     fill=int(self.fill_alpha_inner * 255))
+        # draw.line(list(np.ravel(coords_EL, 'F')), fill=1, width=1, joint='curve')
+        draw.line(list(np.ravel(coords_L1, 'F')), fill=self.fill_line, width=self.capillary_line_width)  # make width va
+        draw.line(list(np.ravel(coords_L2, 'F')), fill=self.fill_line, width=self.capillary_line_width)
+        draw.line(list(np.ravel(coords_b3, 'F')), fill=self.fill_line, joint='curve', width=self.capillary_line_width)
 
-        ax.add_patch(trapped_particle_inner)
-        ax.add_patch(trapped_particle_outer)
+        # draw.polygon(list(np.ravel(coords_EL,'F')),
+        #              fill=None,
+        #              outline=int(self.fill_alpha_outer * 255))
 
+        #
         if is_annotate:
-            text_kwargs = dict(ha="left", va="center", rotation=0, size=10)
-            ax.text(
-                20, self.dim[1] - 10, f"L_Band: {self.l_band}", **text_kwargs)
-            ax.text(
-                20, self.dim[1] - 25, f"R_Band: {self.r_band}", **text_kwargs)
-            ax.text(
-                20, self.dim[1] - 40, f"Vol: {self.volume}", **text_kwargs)
+            # text_kwargs = dict(ha="left", va="center", rotation=0, size=10)
+            draw.text(
+                (20, self.dim[1] - 10), text=f"L_Band: {self.l_band}")
+            draw.text(
+                (20, self.dim[1] - 25), text=f"R_Band: {self.r_band}")
+            draw.text(
+                (20, self.dim[1] - 40), text=f"Vol: {self.volume}")
 
 
 class CapillaryImageGenerator(ImageGenerator):
-    def __init__(self, save_dir=None, num_images: int = 1):
-        super(CapillaryImageGenerator, self).__init__(save_dir)
+    """
+    Generator to spit out capillary images
+    """
+
+    def __init__(self, save_dir=None, num_images: int = 1, **kwargs):
+        super(CapillaryImageGenerator, self).__init__(save_dir, **kwargs)
         self.num_images = num_images
+
+        # generator params
 
     def generate(self):
         # available_theta = np.linspace(2, 20, num=self.num_images, dtype=int)
-        available_ref_coord = [(200, 50)]
+
+        available_ref_coord = [(200, 50), ]
         available_l_band = np.linspace(1, 20, num=self.num_images, dtype=int)
         available_taper_c1_dist = np.linspace(80, 150, num=self.num_images, dtype=int)
 
-        parameter_space = product(available_ref_coord, available_l_band, available_taper_c1_dist)
+        parameter_space = product(available_ref_coord,
+                                  available_l_band,
+                                  available_taper_c1_dist)
         selected_params = random.sample(list(parameter_space), self.num_images)
         # initialise our results array : [idx, lband, rband, vol, theta]
         idx_dtype = ('idx', 'i4')
@@ -292,27 +316,19 @@ class CapillaryImageGenerator(ImageGenerator):
                                        l_band=param[1],
                                        taper_to_c1_dist=param[2])
 
-            fig, ax = plt.subplots(figsize=get_figsize(*capillary.dim))
-            capillary.generate_image(ax, is_annotate=False)
+            temp_image = Image.new(mode='L', size=capillary.dim, color=255)
+            capillary.generate_image(temp_image, is_annotate=False)
 
-            plt.axis('off')
-            fig.tight_layout(pad=0)
-            img_fp = str(self.save_img_dir / str(idx).zfill(5)) + '.png'
-            scale_factor = fig.get_size_inches()
+            img_fp = str(save_dir / str(idx).zfill(len(str(self.num_images)))) + '.png'
 
             # plt.autoscale(tight=True)
-            plt.savefig(self.save_img_dir / img_fp)
-            plt.close(fig)
-            plt.clf()
-
+            temp_image.save(img_fp)
             res_T0[idx] = np.array([(idx, capillary.l_band, capillary.r_band, capillary.volume, capillary.theta)],
                                    dtype=T0_dtypes)
 
             res_T1[idx] = np.array([(idx, *capillary.coords)], dtype=T1_dtypes)
 
-
-
-        res_fp = str(self.save_img_dir / 'targets')
+        res_fp = str(save_dir / 'targets')
         np.savez(res_fp, T0=res_T0, T1=res_T1, allow_pickle=False)
 
 
@@ -330,5 +346,5 @@ if __name__ == "__main__":
     # fig, ax = plt.subplots()
     # single_cap.generate_image(ax)
     # plt.show()
-    cap = CapillaryImageGenerator(save_dir=None, num_images=10)
+    cap = CapillaryImageGenerator(save_dir=None, num_images=100)
     cap.generate()
