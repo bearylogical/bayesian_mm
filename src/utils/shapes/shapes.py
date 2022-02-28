@@ -4,7 +4,10 @@ from pathlib import Path
 from typing import Union, Tuple
 from time import strftime
 from scipy.special import comb
+import shutil
+import logging
 
+logger = logging.getLogger()
 
 class ImageGenerator:
     """
@@ -16,7 +19,8 @@ class ImageGenerator:
                  seed: Union[None, int] = None,
                  is_segment: bool = False,
                  is_train_split: bool = True,
-                 train_test_ratio: Union[float, None] = None):
+                 train_test_ratio: Union[float, None] = None,
+                 force_images: bool = False):
         # TODO: Move this implementation to another method instead of running on initialisation
         if save_dir is None:  # initialise save dir as current date ISO8601 YYYYMMDD format
             temp_dir = Path.cwd() / 'dataset' / strftime("%Y%m%d")
@@ -27,6 +31,11 @@ class ImageGenerator:
                 self.save_dir = save_dir
         else:
             raise AttributeError
+
+        if force_images:
+            print(f"Force images set to true, deleting old files in {self.save_dir}")
+            shutil.rmtree(self.save_dir)
+            self.save_dir.mkdir(parents=True, exist_ok=True)
 
         if is_segment:
             self.save_segment_dir = self.save_dir / 'segment'
