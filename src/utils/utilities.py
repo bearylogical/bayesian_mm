@@ -1,5 +1,13 @@
 import logging
 
+
+def get_PIL_version()->list:
+    import PIL
+
+    return str(PIL.__version__).split('.')
+
+
+
 def set_logger():
     logger = logging.getLogger('bayesian_nn')
     logger.setLevel(logging.DEBUG)

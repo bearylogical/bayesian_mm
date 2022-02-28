@@ -1,8 +1,7 @@
 import random
 from PIL import Image, ImageDraw
-from src.utils.shapes.shapes import ImageGenerator, \
-    get_bezier_parameters, \
-    bezier_curve
+from src.utils.shapes.shapes import ImageGenerator
+from src.utils.utilities import get_PIL_version
 from itertools import product, chain
 import numpy as np
 from skimage.draw import line, circle_perimeter
@@ -275,10 +274,16 @@ class CapillaryImage:
         # draw.line(list(np.ravel(coords_EL, 'F')), fill=self.fill_line, joint='curve', width=1)
         # draw.line([x_s[-1], y_s[-1], x_s[0], y_s[0]], fill=self.fill_line, joint='curve', width=1)
 
+        # compatibility layer, somehow breaks at PIL 7.
+        if int(get_PIL_version()[0]) < 9:
+            coords_b3 = [tuple(xy) for xy in np.ravel(coords_b3, 'F').reshape(-1, 2).tolist()]
+        else:
+            coords_b3 = list(np.ravel(coords_L2, 'F'))
+
         # draw.line(list(np.ravel(coords_EL, 'F')), fill=1, width=1, joint='curve')
         draw.line(list(np.ravel(coords_L1, 'F')), fill=self.fill_line, width=self.capillary_line_width)  # make width va
         draw.line(list(np.ravel(coords_L2, 'F')), fill=self.fill_line, width=self.capillary_line_width)
-        draw.line(list(np.ravel(coords_b3, 'F')), fill=self.fill_line, joint='curve', width=self.capillary_line_width)
+        draw.line(coords_b3, fill=self.fill_line, joint='curve', width=self.capillary_line_width)
 
         # draw.polygon(list(np.ravel(coords_EL,'F')),
         #              fill=None,
@@ -387,7 +392,7 @@ def _calc_vol(r1, r2, b1, b2, l_band):
     return vol_e1 + vol_e2 + vol_cf
 
 
-def sort_xy(x: np.ndarray, y:np.ndarray):
+def sort_xy(x: np.ndarray, y: np.ndarray):
     """
     Sorts x,y vertices of a polygon using the center of mass.
 
