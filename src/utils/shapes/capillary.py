@@ -305,10 +305,11 @@ class CapillaryImageGenerator(ImageGenerator):
     Generator to spit out capillary images
     """
 
-    def __init__(self, save_dir=None, num_images: int = 1, **kwargs):
+    def __init__(self, save_dir=None, num_images: int = 1, target_size: Tuple[int, int]=  (400, 400), **kwargs):
         super(CapillaryImageGenerator, self).__init__(save_dir, **kwargs)
         self.num_images = num_images
         self.UPSCALE = 3
+        self.target_size = target_size
 
         # generator params
 
@@ -357,7 +358,7 @@ class CapillaryImageGenerator(ImageGenerator):
                           dtype=T0_dtypes)
         res_T1 = np.zeros(len(selected_params), dtype=T1_dtypes)
         res_T2 = np.zeros(len(selected_params), dtype=T2_dtypes)
-
+        scale = None
         for idx, param in enumerate(tqdm(selected_params)):
             capillary = CapillaryImage(yx_r=param[0],
                                        l_band=param[1],
@@ -371,16 +372,19 @@ class CapillaryImageGenerator(ImageGenerator):
             capillary.generate_image(temp_image, is_annotate=False)
 
             img_fp = str(save_dir / str(idx).zfill(len(str(len(selected_params))))) + '.png'
-            temp_image = temp_image.resize(size=(capillary.dim[0] * 3, capillary.dim[1] * 3), resample=Image.ANTIALIAS)
-            temp_image.thumbnail(size=(capillary.dim[0] // 3, capillary.dim[1] // 3), resample=Image.ANTIALIAS)
+            if scale is None:
+                scale = capillary.dim[0] // self.target_size[0]
+            # temp_image = temp_image.resize(size=(capillary.dim[0] * 3, capillary.dim[1] * 3), resample=Image.ANTIALIAS)
+
+            temp_image.thumbnail(size=(capillary.dim[0] // scale, capillary.dim[1] // scale), resample=Image.ANTIALIAS)
             # plt.autoscale(tight=True)
             temp_image.save(img_fp)
             res_T0[idx] = np.array([(idx, capillary.l_band, capillary.r_band, capillary.volume, capillary.theta)],
                                    dtype=T0_dtypes)
 
-            res_T1[idx] = np.array([(idx, *capillary.coords // 3)], dtype=T1_dtypes)
+            res_T1[idx] = np.array([(idx, *capillary.coords / scale)], dtype=T1_dtypes)
 
-            res_T2[idx] = np.array([(idx, *capillary.bounding_box // 3)], dtype=T2_dtypes)
+            res_T2[idx] = np.array([(idx, *capillary.bounding_box / scale)], dtype=T2_dtypes)
 
         res_fp = str(save_dir / 'targets')
         np.savez(res_fp, T0=res_T0, T1=res_T1, T2=res_T2, allow_pickle=False)
@@ -423,5 +427,5 @@ if __name__ == "__main__":
     # fig, ax = plt.subplots()
     # single_cap.generate_image(ax)
     # plt.show()
-    cap = CapillaryImageGenerator(save_dir=None, num_images=10, force_images=True)
+    cap = CapillaryImageGenerator(save_dir=None, num_images=10, force_images=True, target_size=(128, 128))
     cap.generate()

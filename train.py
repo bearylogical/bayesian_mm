@@ -13,17 +13,17 @@ import wandb
 from pathlib import Path
 import os
 from functools import partial
-from typing import Union
+from typing import Union, Tuple
 import logging
 
 
 logger = set_logger() if not logging.getLogger().hasHandlers() else logging.getLogger()
 
 
-def generate_data(num_samples: int = 10, training_pct: float = 0.8):
+def generate_data(num_samples: int = 10, training_pct: float = 0.8, target_size: Tuple[int, int] = (128, 128)):
     from src.utils.shapes.capillary import CapillaryImageGenerator
     logger.info("Creating Images")
-    cap = CapillaryImageGenerator(num_images=num_samples, train_test_ratio=training_pct)
+    cap = CapillaryImageGenerator(num_images=num_samples, train_test_ratio=training_pct, target_size=target_size)
 
     num_train = int(training_pct * num_samples)
     num_test = training_pct - num_train
@@ -84,6 +84,7 @@ def load_model(model_path: Union[str, Path]):
 def train(experiment_name: Union[str, None] = "DefaultProject", task="T1", **kwargs):
     from pathlib import Path
     from time import strftime
+
 
     num_samples = kwargs.get('num_samples', 10)
     batch_size = kwargs.get('batch_size', 10)
