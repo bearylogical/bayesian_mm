@@ -35,8 +35,13 @@ def generate_data(num_samples: int = 10, training_pct: float = 0.8):
     num_test = training_pct - num_train
     _, _, train_files = next(os.walk(cap.train_dir))
     _, _, test_files = next(os.walk(cap.test_dir))
+    if len(train_files) > 0 or len(test_files) > 0:
+        logger.debug('Test and train images seem to exist, now checking')
+
     if len(train_files) != num_train + 1 and len(test_files) != num_test + 1:
-        logger.debug("No samples detected, creating images")
+        logger.debug("Samples length seems to not match, clearing folder and regenerating images")
+        [os.remove(cap.train_dir / f) for f in train_files]
+        [os.remove(cap.test_dir / f) for f in test_files]
         cap.generate()
         logger.debug(f"{num_samples} images created at {cap.save_img_dir}")
     else:
@@ -170,4 +175,4 @@ def train(experiment_name: Union[str, None] = "DefaultProject", task="T1", **kwa
 
 
 if __name__ == "__main__":
-    train("Test_Experiment", num_samples=1000, epochs=10)
+    train("Test_Experiment", num_samples=10, epochs=10)
