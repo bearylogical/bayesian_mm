@@ -51,10 +51,14 @@ class BaseDataLoader(Sequence):
     def _get_input_image_data(self, batch_input_img_paths):
         x = np.zeros((self.batch_size,) + self.img_size + (self.channels,), dtype="float32")
         for j, path in enumerate(batch_input_img_paths):
-            img = load_img(path, color_mode=self.color_mode, target_size=self.img_size)
-            img = img_to_array(img)
+            # img = load_img(path, color_mode=self.color_mode, target_size=self.img_size)
+            # img = img_to_array(img)
+            img = cv2.imread(path, cv2.IMREAD_GRAYSCALE)
+            if self.scale_img is None:
+                self.scale_img = img.shape[0] / self.img_size[0]
+            img = cv2.resize(img, dsize=self.img_size, interpolation=cv2.INTER_AREA)
             img = normalize(img)  # normalise inputs such that [0,1]
-            x[j] = img if self._is_rgb else np.expand_dims(img, axis=0)
+            x[j] = img if self._is_rgb else np.expand_dims(img, axis=-1)
 
         return x
 
@@ -76,9 +80,20 @@ class BaseRegressionDataLoader(BaseDataLoader):
 
     def _get_target_data(self, batch_input_img_idx, fields):
         y_data = np.load(self.target_data_path)[self.task]
+        if self.num_targets is None:
+            print('No number of targets supplied, inferring from data source')
+            fields = [name for name in y_data.dtype.names if name != 'idx']
+            print(f'{len(fields)} targets identified.')
+            self.num_targets = len(fields)
+
         y = np.zeros((self.batch_size, self.num_targets))
         for i, img_idx in enumerate(batch_input_img_idx):
-            y[i] = get_target_data_from_idx(y_data, img_idx, fields=fields)
+            _y = get_target_data_from_idx(y_data, img_idx, fields=fields)
+            if self.scale_img is not None:
+                y[i] = [_ty  / self.scale_img for _ty in _y]
+            else:
+                y[i] = _y
+
         return y
 
 
