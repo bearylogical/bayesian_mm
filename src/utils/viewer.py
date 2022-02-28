@@ -76,23 +76,22 @@ def get_bb_box_outputs(coords: Union[Tuple[int], np.ndarray]):
     w = abs(coords[0] - coords[2])
     h = abs(coords[1] - coords[3])
 
-    return coords[:2], w , -h
+    return coords[:2], w, -h
 
 
 def display_composite(img: Image.Image,
                       bb_box_coords: Union[Tuple[int], np.ndarray],
                       coords: Union[np.ndarray, None],
-                      marker_size:int=2,
-                      marker_color='red'):
+                      marker_size: int = 3):
     fig = plt.figure(figsize=get_figsize(*img.size))
     ax = fig.add_axes([0, 0, 1, 1])
     ax.imshow(img, origin='lower', cmap='gray', aspect='auto')
     xy, width, height = get_bb_box_outputs(bb_box_coords)
-    rect = Rectangle(xy, width, height, fill=False, linewidth=1)
+    rect = Rectangle(xy, width, height, fill=False, linewidth=1, edgecolor='red')
 
     ax.add_patch(rect)
     coords = coords.reshape(7, 2)
-    ax.scatter(coords[:, 0], coords[:, 1], s=marker_size, c=marker_color)
+    ax.plot(coords[:, 0], coords[:, 1], 'mo', ms=marker_size)
     plt.axis('off')
     plt.show()
 
@@ -122,12 +121,13 @@ def display_img_coords(img: Image.Image,
     fig = plt.figure(figsize=get_figsize(*img.size))
     ax = fig.add_axes([0, 0, 1, 1])
     ax.imshow(img, origin='lower', cmap='gray', aspect='auto')
-    ax.scatter(true_coords[:, 0], true_coords[:, 1], s=marker_size, c=true_marker_color)
+    ax.plot(true_coords[:, 0], true_coords[:, 1], 'mo', ms=marker_size, label='Ground Truth')
 
     if pred_coords is not None:
         pred_coords = pred_coords.reshape(7, 2)
-        ax.scatter(pred_coords[:, 0], pred_coords[:, 1], s=marker_size, c=pred_marker_color)
+        ax.plot(pred_coords[:, 0], pred_coords[:, 1], 'cx', ms=marker_size, label='Predicted')
 
+    plt.legend()
     plt.axis('off')
     plt.show()
 
@@ -135,9 +135,9 @@ def display_img_coords(img: Image.Image,
 if __name__ == "__main__":
     from pathlib import Path
 
-    img_path = Path('dataset/20220222/images/train')
+    img_path = Path('dataset/20220228/images/train')
     data_path = img_path / 'targets.npz'
-    sample_img = img_path / '01.png'
+    sample_img = img_path / '1.png'
 
     from src.utils.loader import get_img_target_data
 
@@ -145,4 +145,8 @@ if __name__ == "__main__":
     _, bb_data = get_img_target_data(sample_img, data_path, task="T2")
     t_coords = np.array([v for v in data.values()])
     bb_data = np.array([v for v in bb_data.values()])
-    display_composite(t_img, bb_box_coords=bb_data, coords=t_coords)
+    # display_composite(t_img, bb_box_coords=bb_data, coords=t_coords)
+    import numpy as np
+    pred_coords = np.random.randint(-5, 5, size=t_coords.size) + t_coords
+    display_img_coords(t_img, t_coords, pred_coords)
+
