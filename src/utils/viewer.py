@@ -1,5 +1,5 @@
 # from src.utils.loader import get_pairs_from_paths
-import os.path
+from pathlib import Path
 
 from PIL.ImageOps import autocontrast
 import matplotlib.pyplot as plt
@@ -7,11 +7,12 @@ import matplotlib as mpl
 from matplotlib.patches import Rectangle
 import tensorflow as tf
 import cv2
+import albumentations as A
 import numpy as np
-from src.utils.loader import get_img_target_data
+from src.utils.loader import get_image_paths_from_dir, RegressionDataLoaderT1
 from PIL import Image
 from typing import Union, List, Tuple
-
+import copy
 
 def display_mask(mask):
     """Quick utility to display a model's prediction."""
@@ -132,21 +133,50 @@ def display_img_coords(img: Image.Image,
     plt.show()
 
 
+def display_augmentations(dataset: RegressionDataLoaderT1, batch_idx=0, idx=0, samples=10, cols=5):
+
+    if not isinstance(dataset, RegressionDataLoaderT1):
+        raise Exception(f'Incorrect object type of dataset ({type(dataset)})')
+
+    dataset = copy.deepcopy(dataset)
+    dataset.transform = A.Compose([t for t in dataset.transform if not isinstance(t, A.Normalize)],
+                                  keypoint_params=A.KeypointParams(format='xy',
+                                                                   remove_invisible=False,
+                                                                   angle_in_degrees=True))
+    rows = samples // cols
+    figure, ax = plt.subplots(nrows=rows, ncols=cols, figsize=(12, 6))
+    for i in range(samples):
+        trans_image, trans_y = dataset[batch_idx][:]
+        trans_y = trans_y[idx].reshape(7, 2)
+        ax.ravel()[i].imshow(trans_image[idx], cmap='gray', aspect='auto')
+        ax.ravel()[i].plot(trans_y[:, 0], trans_y[:, 1], 'mo', ms=2, label='Ground Truth')
+        ax.ravel()[i].legend()
+        ax.ravel()[i].set_axis_off()
+    plt.tight_layout()
+    plt.show()
+
 if __name__ == "__main__":
-    from pathlib import Path
+    # from pathlib import Path
+    #
+    # img_path = Path('dataset/20220228/images/train')
+    # data_path = img_path / 'targets.npz'
+    # sample_img = img_path / '1.png'
+    #
+    # from src.utils.loader import get_img_target_data
+    #
+    # t_img, data = get_img_target_data(sample_img, data_path, task="T1")
+    # _, bb_data = get_img_target_data(sample_img, data_path, task="T2")
+    # t_coords = np.array([v for v in data.values()])
+    # bb_data = np.array([v for v in bb_data.values()])
+    # # display_composite(t_img, bb_box_coords=bb_data, coords=t_coords)
+    # import numpy as np
+    # pred_coords = np.random.randint(-5, 5, size=t_coords.size) + t_coords
+    # display_img_coords(t_img, t_coords, None)
 
-    img_path = Path('dataset/20220228/images/train')
-    data_path = img_path / 'targets.npz'
-    sample_img = img_path / '1.png'
+    img_dir = 'dataset/20220228/images/train'
+    img_paths = get_image_paths_from_dir(img_dir)
+    target_path = 'dataset/20220228/images/train/targets.npz'
 
-    from src.utils.loader import get_img_target_data
-
-    t_img, data = get_img_target_data(sample_img, data_path, task="T1")
-    _, bb_data = get_img_target_data(sample_img, data_path, task="T2")
-    t_coords = np.array([v for v in data.values()])
-    bb_data = np.array([v for v in bb_data.values()])
-    # display_composite(t_img, bb_box_coords=bb_data, coords=t_coords)
-    import numpy as np
-    pred_coords = np.random.randint(-5, 5, size=t_coords.size) + t_coords
-    display_img_coords(t_img, t_coords, pred_coords)
+    train_gen = RegressionDataLoaderT1(input_img_paths=img_paths,task='T1', batch_size=2, img_size=(128,128), target_paths=target_path)
+    display_augmentations(train_gen)
 

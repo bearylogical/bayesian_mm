@@ -3,11 +3,14 @@ import os
 from tensorflow.keras.utils import Sequence
 from src.utils.constants import ACCEPTABLE_IMAGE_FORMATS, \
     ACCEPTABLE_SEGMENTATION_FORMATS
+from src.utils.augmentations import default_aug
 import numpy as np
 from tensorflow.keras.preprocessing.image import load_img, img_to_array
 from typing import List, Tuple, Union
 from PIL import Image
 from pathlib import Path
+import albumentations as A
+import cv2
 
 VALID_TASKS = ["T0", "T1"]
 
@@ -27,7 +30,8 @@ class BaseDataLoader(Sequence):
                  img_size: Tuple[int, int],
                  input_img_paths: List[Union[Path, str]],
                  target_paths: Union[List[Union[Path, str]], Union[Path, str]],
-                 is_rgb: bool = False):
+                 is_rgb: bool = False,
+                 transform=None):
         """
         Base class for Data Loaders
 
@@ -44,6 +48,8 @@ class BaseDataLoader(Sequence):
         self.channels = 3 if is_rgb else 1
         self.color_mode = "rgb" if is_rgb else "grayscale"
         self._is_rgb = is_rgb
+        self.transform = transform
+        self.scale_img = None
 
     def __len__(self):
         return len(self.input_img_paths) // self.batch_size
@@ -64,7 +70,7 @@ class BaseDataLoader(Sequence):
 
 
 class BaseRegressionDataLoader(BaseDataLoader):
-    def __init__(self, batch_size, img_size, input_img_paths, target_paths, num_targets=4, task: str = "T1",
+    def __init__(self, batch_size, img_size, input_img_paths, target_paths, num_targets=None, task: str = "T1",
                  fields=None):
         super().__init__(batch_size, img_size, input_img_paths, target_paths)
         self.target_data_path = target_paths
@@ -114,11 +120,19 @@ class RegressionDataLoaderT0(BaseRegressionDataLoader):
 
 
 class RegressionDataLoaderT1(BaseRegressionDataLoader):
-    def __init__(self, batch_size, img_size, input_img_paths, target_paths, num_targets=4, task=None, fields=None,
-                 normalize: bool = True):
+    def __init__(self, batch_size,
+                 img_size,
+                 input_img_paths,
+                 target_paths,
+                 num_targets=None,
+                 task=None,
+                 fields=None,
+                 normalize: bool = False,
+                 transform: Union[A.Compose, None] = default_aug()):
         super().__init__(batch_size, img_size, input_img_paths, target_paths, fields, task)
         self.num_targets = num_targets
         self.normalize = normalize
+        self.transform = transform
 
     def __getitem__(self, idx):
         """Returns tuple (input, target) correspond to batch #idx."""
@@ -128,12 +142,20 @@ class RegressionDataLoaderT1(BaseRegressionDataLoader):
 
         x = self._get_input_image_data(batch_input_img_paths)
         y = self._get_target_data(batch_input_img_idx, fields=self.fields)
+
         if self.normalize:
             if self.img_size[0] != self.img_size[1]:
                 raise DataLoaderError(f"Image size not equal:"
                                       f"{self.img_size[0]} "
                                       f"not equal to {self.img_size[1]}")
             y = normalize(y, float(self.img_size[0]))
+
+        if self.transform is not None:
+            for idx, (_xi, _yi) in enumerate(zip(x, y)):
+                _transformed = self.transform(image=_xi, keypoints=_yi.reshape(7, 2))
+                x[idx] = _transformed['image']
+                y[idx] = np.array(_transformed['keypoints']).flatten()
+
         return x, y
 
 
