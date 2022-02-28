@@ -8,6 +8,7 @@ from src.utils.loader import RegressionDataLoaderT1
 from src.models.regression.cnn_regression import ImageRegressionModel
 from wandb.keras import WandbCallback
 from src.utils.experiment import LRLogger
+from src.utils.utilities import set_logger
 import wandb
 from pathlib import Path
 import os
@@ -15,15 +16,8 @@ from functools import partial
 from typing import Union
 import logging
 
-logger = logging.getLogger('bayesian_nn')
-logger.setLevel(logging.DEBUG)
 
-ch = logging.StreamHandler()
-ch.setLevel(logging.ERROR)
-# create formatter and add it to the handlers
-formatter = logging.Formatter('%(asctime)s - %(name)s - %(levelname)s - %(message)s')
-ch = logging.StreamHandler()
-logger.addHandler(ch)
+logger = set_logger() if not logging.getLogger().hasHandlers() else logging.getLogger()
 
 
 def generate_data(num_samples: int = 10, training_pct: float = 0.8):
