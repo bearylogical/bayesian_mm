@@ -71,7 +71,7 @@ class CapillaryImage:
         self.fill_alpha_inner = 0.9  # alpha (transparency) for the "confined" ellipsoid # 1 is full
         self.fill_alpha_outer = 0.3
         self.fill_line = 1
-        self.capillary_line_width = 2
+        self.capillary_line_width = 10
 
     def _check_bounds(self):
         # check for theta (if deg or rad and convert appropriately)
@@ -138,6 +138,7 @@ class CapillaryImage:
         # indices of half circle
         b1_mask = b1_cx <= b1_x1
         b1_xf, b1_yf = b1_cx[b1_mask], b1_ry[b1_mask]
+        # b1_xf, b1_yf = sort_xy(b1_xf, b1_xf)
         # b1_p = get_bezier_parameters(b1_x, b1_y, degree=2)
         # b1_xf, b1_yf = bezier_curve(b1_p, n_times=50)
 
@@ -158,6 +159,7 @@ class CapillaryImage:
         # indices of half circle
         b2_mask = b2_cx >= b2_x1
         b2_xf, b2_yf = b2_cx[b2_mask], b2_ry[b2_mask]
+        # b2_xf, b2_yf = sort_xy(b2_xf, b2_yf)
         # b2_p = get_bezier_parameters(b2_x, b2_y, degree=2)
         # b2_xf, b2_yf = bezier_curve(b2_p, n_times=50)
 
@@ -189,8 +191,10 @@ class CapillaryImage:
         x_L2_v, y_L2_v = x_L2[ind_def], y_L2[ind_def]
         b1_intersect = b1_xf <= min(x_L1_v)
 
-        x_v = np.concatenate([np.flip(b1_xf), x_L1_v, np.flip(b2_xf), np.flip(x_L2_v)])
-        y_v = np.concatenate([np.flip(b1_yf), y_L1_v, np.flip(b2_yf), np.flip(y_L2_v)])
+        x_v = np.concatenate([b1_xf, x_L1_v, b2_xf, x_L2_v])
+        y_v = np.concatenate([b1_yf, y_L1_v, b2_yf, y_L2_v])
+
+        x_v, y_v = sort_xy(x_v, y_v)
 
         midpoint_x_polygon = b1_x1 + 0.5 * l_band
         r_band = np.round(np.tan(theta) * midpoint_x_polygon, 3)
@@ -209,8 +213,8 @@ class CapillaryImage:
         x6 = (b2_x2, b2_y2)
 
         # for bounding box
-        x_min, y_min = b1_x2 , b2_y1
-        x_max, y_max = b2_x2 , b2_y3
+        x_min, y_min = b1_x2, b2_y1
+        x_max, y_max = b2_x2, b2_y3
 
         coords = {
             "L1": (x_L1, y_L1),
@@ -263,7 +267,14 @@ class CapillaryImage:
 
         draw = ImageDraw.Draw(img)
         draw.polygon(list(np.ravel(coords_EL, 'F')),
-                     fill=int(self.fill_alpha_inner * 255))
+                     fill=int(self.fill_alpha_inner * 255),
+                     outline=int(self.fill_alpha_outer * 255))
+        # x_s, y_s = coords_EL
+        # assert len(x_s) == len(y_s)
+        #
+        # draw.line(list(np.ravel(coords_EL, 'F')), fill=self.fill_line, joint='curve', width=1)
+        # draw.line([x_s[-1], y_s[-1], x_s[0], y_s[0]], fill=self.fill_line, joint='curve', width=1)
+
         # draw.line(list(np.ravel(coords_EL, 'F')), fill=1, width=1, joint='curve')
         draw.line(list(np.ravel(coords_L1, 'F')), fill=self.fill_line, width=self.capillary_line_width)  # make width va
         draw.line(list(np.ravel(coords_L2, 'F')), fill=self.fill_line, width=self.capillary_line_width)
@@ -292,19 +303,21 @@ class CapillaryImageGenerator(ImageGenerator):
     def __init__(self, save_dir=None, num_images: int = 1, **kwargs):
         super(CapillaryImageGenerator, self).__init__(save_dir, **kwargs)
         self.num_images = num_images
+        self.UPSCALE = 3
 
         # generator params
 
     def generate(self):
-        # available_theta = np.linspace(2, 20, num=self.num_images, dtype=int)
+        available_theta = [4]
 
-        available_ref_coord = [(200, 50), ]
-        available_l_band = np.linspace(1, 20, num=self.num_images, dtype=int)
-        available_taper_c1_dist = np.linspace(80, 150, num=self.num_images, dtype=int)
+        available_ref_coord = [(200 * 3, 50 * 3), ]
+        available_l_band = np.linspace(1, 20 * 3, num=self.num_images, dtype=int)
+        available_taper_c1_dist = np.linspace(80 * 3, 150 * 3, num=self.num_images, dtype=int)
 
         parameter_space = product(available_ref_coord,
                                   available_l_band,
-                                  available_taper_c1_dist)
+                                  available_taper_c1_dist,
+                                  available_theta)
         selected_params = random.sample(list(parameter_space), self.num_images)
         # initialise our results array : [idx, lband, rband, vol, theta]
         if self.is_train_split:
@@ -315,6 +328,12 @@ class CapillaryImageGenerator(ImageGenerator):
             self._generate_image(train_params, self.train_dir)
             self._generate_image(test_params, self.test_dir)
 
+    def generate_sequences(self):
+
+        # lbands should increase as time goes by
+        # taper to c1 dist should decrease as time goes by (particle moves closer)
+        pass
+
     def _generate_image(self, selected_params: list, save_dir: Path):
         idx_dtype = ('idx', 'i4')
         T0_dtypes = [idx_dtype, ('l_band', 'f4'), ('r_band', 'f4'),
@@ -324,7 +343,7 @@ class CapillaryImageGenerator(ImageGenerator):
         T1_coords = [[(f'x{x}', 'i4'), (f'y{x}', 'i4')] for x in range(7)]
         T1_dtypes.extend(list(chain.from_iterable(T1_coords)))
 
-        T2_dtypes = [idx_dtype , (f'x_min', 'i4'), (f'y_min', 'i4'),(f'x_max', 'i4'), (f'y_max', 'i4')]
+        T2_dtypes = [idx_dtype, (f'x_min', 'i4'), (f'y_min', 'i4'), (f'x_max', 'i4'), (f'y_max', 'i4')]
 
         res_T0 = np.zeros(len(selected_params),
                           dtype=T0_dtypes)
@@ -334,13 +353,18 @@ class CapillaryImageGenerator(ImageGenerator):
         for idx, param in enumerate(tqdm(selected_params)):
             capillary = CapillaryImage(yx_r=param[0],
                                        l_band=param[1],
-                                       taper_to_c1_dist=param[2])
+                                       taper_to_c1_dist=param[2],
+                                       theta=param[3],
+                                       img_size=(1200, 1200),
+                                       taper_dist=300)
 
             temp_image = Image.new(mode='L', size=capillary.dim, color=255)
+
             capillary.generate_image(temp_image, is_annotate=False)
 
             img_fp = str(save_dir / str(idx).zfill(len(str(len(selected_params))))) + '.png'
-
+            # temp_image = temp_image.resize(size=(capillary.dim[0] * 3, capillary.dim[1] * 3), resample=Image.ANTIALIAS)
+            temp_image.thumbnail(size=(capillary.dim[0] // 3, capillary.dim[1] // 3), resample=Image.ANTIALIAS)
             # plt.autoscale(tight=True)
             temp_image.save(img_fp)
             res_T0[idx] = np.array([(idx, capillary.l_band, capillary.r_band, capillary.volume, capillary.theta)],
@@ -361,6 +385,29 @@ def _calc_vol(r1, r2, b1, b2, l_band):
     vol_e2 = np.divide(2, 3) * np.pi * r2 ** 2 * b2
     vol_cf = np.divide(np.pi * l_band, 3) * (r1 ** 2 + r1 * r2 + r2 ** 2)
     return vol_e1 + vol_e2 + vol_cf
+
+
+def sort_xy(x: np.ndarray, y:np.ndarray):
+    """
+    Sorts x,y vertices of a polygon using the center of mass.
+
+    :param x: Array of x coordinates
+    :param y: Array of y coordinates
+    :return: tuple of sorted (x,y) coordinates
+    """
+    x0 = np.mean(x)
+    y0 = np.mean(y)
+
+    r = np.sqrt((x - x0) ** 2 + (y - y0) ** 2)
+
+    angles = np.where((y - y0) > 0, np.arccos((x - x0) / r), 2 * np.pi - np.arccos((x - x0) / r))
+
+    mask = np.argsort(angles)
+
+    x_sorted = x[mask]
+    y_sorted = y[mask]
+
+    return x_sorted, y_sorted
 
 
 if __name__ == "__main__":
