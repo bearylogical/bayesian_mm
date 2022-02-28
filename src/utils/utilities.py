@@ -7,7 +7,6 @@ def get_PIL_version()->list:
     return str(PIL.__version__).split('.')
 
 
-
 def set_logger():
     logger = logging.getLogger('bayesian_nn')
     logger.setLevel(logging.DEBUG)
@@ -18,3 +17,5 @@ def set_logger():
     formatter = logging.Formatter('%(asctime)s - %(name)s - %(levelname)s - %(message)s')
     ch = logging.StreamHandler()
     logger.addHandler(ch)
+
+    return logger
