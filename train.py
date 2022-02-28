@@ -94,7 +94,7 @@ def train(experiment_name: Union[str, None] = "DefaultProject", task="T1", **kwa
     model = kwargs.get('model', None)
     normalize = kwargs.get('normalize', False)
 
-    train_image_dir, test_image_dir = generate_data(num_samples, training_pct)
+    train_image_dir, test_image_dir = generate_data(num_samples, training_pct, target_size=img_size)
 
     if task == "T1":
         NUM_TARGETS = 14
