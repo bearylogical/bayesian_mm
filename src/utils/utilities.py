@@ -15,7 +15,7 @@ def set_logger():
     ch.setLevel(logging.ERROR)
     # create formatter and add it to the handlers
     formatter = logging.Formatter('%(asctime)s - %(name)s - %(levelname)s - %(message)s')
-    ch = logging.StreamHandler()
+    ch.setFormatter(formatter)
     logger.addHandler(ch)
 
     return logger
