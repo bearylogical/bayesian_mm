@@ -333,6 +333,9 @@ class CapillaryImageGenerator(ImageGenerator):
             self._generate_image(train_params, self.train_dir)
             self._generate_image(test_params, self.test_dir)
 
+        else:
+            self._generate_image(selected_params, self.save_img_dir)
+
     def generate_sequences(self):
 
         # lbands should increase as time goes by
