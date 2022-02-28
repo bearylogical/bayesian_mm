@@ -203,7 +203,7 @@ class CapillaryImage:
         volume = round(_calc_vol(r1, r2, b1_x2, b2_x2, l_band), 2)
 
         # For reframed prediction task
-        x0 = yx_r[::-1]  # it was in yx space, convert to xy
+        x0 = (b3_x1, b3_y1)
         x1 = (b1_x1, b1_y1)
         x2 = (b2_x1, b2_y1)
         x3 = (b1_x3, b1_y3)
@@ -368,16 +368,16 @@ class CapillaryImageGenerator(ImageGenerator):
             capillary.generate_image(temp_image, is_annotate=False)
 
             img_fp = str(save_dir / str(idx).zfill(len(str(len(selected_params))))) + '.png'
-            # temp_image = temp_image.resize(size=(capillary.dim[0] * 3, capillary.dim[1] * 3), resample=Image.ANTIALIAS)
+            temp_image = temp_image.resize(size=(capillary.dim[0] * 3, capillary.dim[1] * 3), resample=Image.ANTIALIAS)
             temp_image.thumbnail(size=(capillary.dim[0] // 3, capillary.dim[1] // 3), resample=Image.ANTIALIAS)
             # plt.autoscale(tight=True)
             temp_image.save(img_fp)
             res_T0[idx] = np.array([(idx, capillary.l_band, capillary.r_band, capillary.volume, capillary.theta)],
                                    dtype=T0_dtypes)
 
-            res_T1[idx] = np.array([(idx, *capillary.coords)], dtype=T1_dtypes)
+            res_T1[idx] = np.array([(idx, *capillary.coords // 3)], dtype=T1_dtypes)
 
-            res_T2[idx] = np.array([(idx, *capillary.bounding_box)], dtype=T2_dtypes)
+            res_T2[idx] = np.array([(idx, *capillary.bounding_box // 3)], dtype=T2_dtypes)
 
         res_fp = str(save_dir / 'targets')
         np.savez(res_fp, T0=res_T0, T1=res_T1, T2=res_T2, allow_pickle=False)
@@ -420,5 +420,5 @@ if __name__ == "__main__":
     # fig, ax = plt.subplots()
     # single_cap.generate_image(ax)
     # plt.show()
-    cap = CapillaryImageGenerator(save_dir=None, num_images=100)
+    cap = CapillaryImageGenerator(save_dir=None, num_images=10, force_images=True)
     cap.generate()
