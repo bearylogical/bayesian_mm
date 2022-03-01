@@ -192,7 +192,7 @@ def display_predictions(model: Model,
             img = cv2.resize(img, target_size)
             target_scale = target_size[0] / img_size[0]
             true_coords = true_coords * target_scale
-            pred_coords = true_coords * target_scale
+            pred_coords = pred_coords * target_scale
 
         ax.ravel()[i].imshow(img, origin='lower', cmap='gray', aspect='auto')
         ax.ravel()[i].plot(true_coords[:, 0], true_coords[:, 1], 'mo', ms=2, label='Ground Truth')
