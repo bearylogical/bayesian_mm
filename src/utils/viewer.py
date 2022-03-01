@@ -138,17 +138,21 @@ def display_augmentations(dataset: RegressionDataLoaderT1, batch_idx=0, idx=0, s
     if not isinstance(dataset, RegressionDataLoaderT1):
         raise Exception(f'Incorrect object type of dataset ({type(dataset)})')
 
-    dataset = copy.deepcopy(dataset)
-    dataset.transform = A.Compose([t for t in dataset.transform if not isinstance(t, A.Normalize)],
-                                  keypoint_params=A.KeypointParams(format='xy',
-                                                                   remove_invisible=False,
-                                                                   angle_in_degrees=True))
+    dataset_copy = copy.deepcopy(dataset)
+
     rows = samples // cols
     figure, ax = plt.subplots(nrows=rows, ncols=cols, figsize=(12, 6))
     for i in range(samples):
-        trans_image, trans_y = dataset[batch_idx][:]
+        if i == 0:
+            dataset_copy.transform = None
+        else:
+            dataset_copy.transform = A.Compose([t for t in dataset.transform if not isinstance(t, A.Normalize)],
+                                               keypoint_params=A.KeypointParams(format='xy',
+                                                                                remove_invisible=False,
+                                                                                angle_in_degrees=True))
+        trans_image, trans_y = dataset_copy[batch_idx][:]
         trans_y = trans_y[idx].reshape(7, 2)
-        ax.ravel()[i].imshow(trans_image[idx], cmap='gray', aspect='auto')
+        ax.ravel()[i].imshow(trans_image[idx], origin='lower', cmap='gray', aspect='auto')
         ax.ravel()[i].plot(trans_y[:, 0], trans_y[:, 1], 'mo', ms=2, label='Ground Truth')
         ax.ravel()[i].legend()
         ax.ravel()[i].set_axis_off()
@@ -172,7 +176,7 @@ if __name__ == "__main__":
     # import numpy as np
     # pred_coords = np.random.randint(-5, 5, size=t_coords.size) + t_coords
     # display_img_coords(t_img, t_coords, None)
-
+    #
     img_dir = 'dataset/20220228/images/train'
     img_paths = get_image_paths_from_dir(img_dir)
     target_path = 'dataset/20220228/images/train/targets.npz'
