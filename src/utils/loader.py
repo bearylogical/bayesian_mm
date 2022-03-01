@@ -186,7 +186,7 @@ def normalize(input_image: np.ndarray, max_val: float = 255.0):
 
 
 def prepare_img_prediction(img_arr: np.ndarray):
-    sample_img = np.expand_dims(img_arr, 2)
+    sample_img = np.expand_dims(img_arr, -1)
     sample_img = normalize(sample_img)
     return np.reshape(sample_img, (1,) + sample_img.shape).astype('float32')
 
@@ -263,8 +263,8 @@ def get_img_target_data(img_path: Union[str, Path], data_path: Union[str, Path],
     :param include_idx: Include the id col
     :return:
     """
-    img = cv2.imread(img_path)  # should be given
-    img = cv2.resize(img, *img_size, interpolation=cv2.INTER_AREA)
+    img = cv2.imread(img_path, cv2.IMREAD_GRAYSCALE)  # should be given
+    img = cv2.resize(img, img_size, interpolation=cv2.INTER_AREA)
     img_idx = get_idx_from_img_path(img_path)  # should be given
 
     data_path_ext = os.path.splitext(data_path)[-1]

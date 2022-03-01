@@ -189,7 +189,7 @@ def display_predictions(model: Model,
         pred_coords = model.predict(prepare_img_prediction(img)).reshape(7, 2)
 
         if target_size is not None:
-            img = cv2.resize(img, *target_size)
+            img = cv2.resize(img, target_size)
             target_scale = target_size[0] / img_size[0]
             true_coords = true_coords * target_scale
             pred_coords = true_coords * target_scale
@@ -220,10 +220,14 @@ if __name__ == "__main__":
     # pred_coords = np.random.randint(-5, 5, size=t_coords.size) + t_coords
     # display_img_coords(t_img, t_coords, None)
     #
-    img_dir = 'dataset/20220228/images/train'
-    img_paths = get_image_paths_from_dir(img_dir)
-    target_path = 'dataset/20220228/images/train/targets.npz'
+    # img_dir = 'dataset/20220228/images/train'
+    # img_paths = get_image_paths_from_dir(img_dir)
+    # target_path = 'dataset/20220228/images/train/targets.npz'
+    #
+    # train_gen = RegressionDataLoaderT1(input_img_paths=img_paths,task='T1', batch_size=2, img_size=(128,128), target_paths=target_path)
+    # display_augmentations(train_gen)
+    from train import load_model
+    sample_model = load_model("dataset/sample/3x3and5x5Filter_20220301_1259")
 
-    train_gen = RegressionDataLoaderT1(input_img_paths=img_paths,task='T1', batch_size=2, img_size=(128,128), target_paths=target_path)
-    display_augmentations(train_gen)
-
+    img_dir = 'dataset/20220301/images/train'
+    display_predictions(sample_model, img_dir)
