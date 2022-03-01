@@ -96,7 +96,7 @@ class BaseRegressionDataLoader(BaseDataLoader):
         for i, img_idx in enumerate(batch_input_img_idx):
             _y = get_target_data_from_idx(y_data, img_idx, fields=fields)
             if self.scale_img is not None:
-                y[i] = [_ty  / self.scale_img for _ty in _y]
+                y[i] = [_ty / self.scale_img for _ty in _y]
             else:
                 y[i] = _y
 
@@ -185,7 +185,13 @@ def normalize(input_image: np.ndarray, max_val: float = 255.0):
     return input_image
 
 
-def _get_images_from_dir(image_dir: str, sort=True) -> List[Tuple[str, str, str]]:
+def prepare_img_prediction(img_arr: np.ndarray):
+    sample_img = np.expand_dims(img_arr, 2)
+    sample_img = normalize(sample_img)
+    return np.reshape(sample_img, (1,) + sample_img.shape).astype('float32')
+
+
+def _get_images_from_dir(image_dir: Union[str, Path], sort=True) -> List[Tuple[str, str, str]]:
     image_list = []
 
     for dir_entry in os.listdir(image_dir):
@@ -201,7 +207,7 @@ def _get_images_from_dir(image_dir: str, sort=True) -> List[Tuple[str, str, str]
         return image_list
 
 
-def get_image_paths_from_dir(image_dir: str) -> List:
+def get_image_paths_from_dir(image_dir: Union[str, Path]) -> List:
     """
     Returns a list of image path in the proposed image directory with an */images/ parent dir
     :param image_dir:
@@ -245,7 +251,7 @@ def get_target_data_from_idx(data: np.ndarray, img_idx: int, include_idx=False,
 
 def get_img_target_data(img_path: Union[str, Path], data_path: Union[str, Path],
                         img_size: Union[Tuple[int, int], None] = None, task: str = "T1", include_idx=False) -> \
-        Tuple[Image.Image, dict]:
+        Tuple[np.ndarray, dict]:
     """
     Returns a tuple containing the Image as a PIL instance and a dictionary
     with the field property as key and its associated value.
@@ -257,7 +263,8 @@ def get_img_target_data(img_path: Union[str, Path], data_path: Union[str, Path],
     :param include_idx: Include the id col
     :return:
     """
-    img = load_img(img_path, target_size=img_size)  # should be given
+    img = cv2.imread(img_path)  # should be given
+    img = cv2.resize(img, *img_size, interpolation=cv2.INTER_AREA)
     img_idx = get_idx_from_img_path(img_path)  # should be given
 
     data_path_ext = os.path.splitext(data_path)[-1]

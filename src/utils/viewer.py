@@ -1,18 +1,20 @@
 # from src.utils.loader import get_pairs_from_paths
 from pathlib import Path
 
-from PIL.ImageOps import autocontrast
 import matplotlib.pyplot as plt
 import matplotlib as mpl
 from matplotlib.patches import Rectangle
 import tensorflow as tf
+from PIL import Image
 import cv2
 import albumentations as A
 import numpy as np
-from src.utils.loader import get_image_paths_from_dir, RegressionDataLoaderT1
+from src.utils.loader import get_image_paths_from_dir, RegressionDataLoaderT1, get_img_target_data, prepare_img_prediction
 from PIL import Image
 from typing import Union, List, Tuple
 import copy
+import random
+from keras import Model
 
 def display_mask(mask):
     """Quick utility to display a model's prediction."""
@@ -154,6 +156,47 @@ def display_augmentations(dataset: RegressionDataLoaderT1, batch_idx=0, idx=0, s
         trans_y = trans_y[idx].reshape(7, 2)
         ax.ravel()[i].imshow(trans_image[idx], origin='lower', cmap='gray', aspect='auto')
         ax.ravel()[i].plot(trans_y[:, 0], trans_y[:, 1], 'mo', ms=2, label='Ground Truth')
+        ax.ravel()[i].legend()
+        ax.ravel()[i].set_axis_off()
+    plt.tight_layout()
+    plt.show()
+
+
+def display_predictions(model: Model,
+                        img_dir: Union[str, Path],
+                        num_images:int=10,
+                        rows:int=2,
+                        img_size:Tuple[int, int] = (128,128),
+                        target_size: Union[Tuple[int, int], None]= (400, 400)):
+
+    if not isinstance(model, Model):
+        raise Exception(f'Incorrect object type of model ({type(model)})')
+
+    if isinstance(img_dir, str):
+        img_dir = Path(img_dir)
+
+    cols = num_images // rows
+    figure, ax = plt.subplots(nrows=rows, ncols=cols, figsize=(12, 6))
+
+    data_path = img_dir / 'targets.npz'
+    imgs = get_image_paths_from_dir(img_dir)
+    # get random selection of imgs
+    rand_imgs = random.sample(list(imgs), num_images)
+
+    for i in range(num_images):
+        img, coords = get_img_target_data(rand_imgs[i], data_path, img_size)
+        true_coords = np.array([v for v in coords.values()]).reshape(7, 2)
+        pred_coords = model.predict(prepare_img_prediction(img)).reshape(7, 2)
+
+        if target_size is not None:
+            img = cv2.resize(img, *target_size)
+            target_scale = target_size[0] / img_size[0]
+            true_coords = true_coords * target_scale
+            pred_coords = true_coords * target_scale
+
+        ax.ravel()[i].imshow(img, origin='lower', cmap='gray', aspect='auto')
+        ax.ravel()[i].plot(true_coords[:, 0], true_coords[:, 1], 'mo', ms=2, label='Ground Truth')
+        ax.ravel()[i].plot(pred_coords[:, 0], pred_coords[:, 1], 'cx', ms=2, label='Predicted')
         ax.ravel()[i].legend()
         ax.ravel()[i].set_axis_off()
     plt.tight_layout()
