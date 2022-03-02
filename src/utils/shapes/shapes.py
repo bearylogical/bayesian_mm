@@ -148,14 +148,14 @@ def bezier_curve(points, n_times=50):
 def apply_keypoints_scale(keypoints: Sequence[Sequence[float]],
                           img_size: Tuple[int, int],
                          target_size:Tuple[int, int],
-                         dtype:  Union[Type[int], Type[float]] = int):
+                         dtype = int):
     return [apply_keypoint_scale(keypoint, img_size=img_size, target_size=target_size, dtype=dtype) for keypoint in keypoints]
 
 
 def apply_keypoint_scale(keypoint: Sequence[float],
                          img_size: Tuple[int, int],
                          target_size:Tuple[int, int],
-                         dtype: Union[Type[int], Type[float]] = int):
+                         dtype = int):
     scale_x,scale_y = get_scale_factor(img_size, target_size)
     return keypoint_scale(keypoint, scale_x, scale_y, dtype)
 
@@ -169,7 +169,7 @@ def get_scale_factor(img_size: Tuple[int, int], target_size:Tuple[int, int]):
 def keypoint_scale(keypoint: Sequence[float],
                    scale_x: float,
                    scale_y: float,
-                   dtype:  Union[Type[int], Type[float]] = int):
+                   dtype= int):
     """Scales a keypoint by scale_x and scale_y.
     Args:
         keypoint (tuple): A keypoint `(x, y)`.
