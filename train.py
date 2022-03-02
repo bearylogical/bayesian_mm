@@ -20,10 +20,16 @@ import logging
 logger = set_logger() if not logging.getLogger().hasHandlers() else logging.getLogger()
 
 
-def generate_data(num_samples: int = 10, training_pct: float = 0.8, target_size: Tuple[int, int] = (128, 128)):
+def generate_data(num_samples: int = 10,
+                  training_pct: float = 0.8,
+                  target_size: Tuple[int, int] = (128, 128),
+                  force_gen: bool = False):
     from src.utils.shapes.capillary import CapillaryImageGenerator
     logger.info("Creating Images")
-    cap = CapillaryImageGenerator(num_images=num_samples, train_test_ratio=training_pct, target_size=target_size)
+    cap = CapillaryImageGenerator(num_images=num_samples,
+                                  train_test_ratio=training_pct,
+                                  target_size=target_size,
+                                  force_images=force_gen)
 
     num_train = int(training_pct * num_samples)
     num_test = training_pct - num_train
