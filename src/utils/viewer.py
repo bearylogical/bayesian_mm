@@ -115,7 +115,7 @@ def _plot_keypoints(ax : plt.Axes, coords:np.ndarray, marker_size=3, label='Grou
         ax.annotate(f'{idx}', (t_x, t_y))
 
 
-def display_img_coords(img: Image.Image,
+def display_img_coords(img: np.ndarray,
                        true_coords: Union[np.ndarray, None] = None,
                        pred_coords: Union[np.ndarray, None] = None,
                        marker_size=2,
