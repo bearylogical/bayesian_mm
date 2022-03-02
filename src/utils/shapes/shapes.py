@@ -7,7 +7,9 @@ from scipy.special import comb
 import shutil
 import logging
 from collections.abc import Sequence
+
 logger = logging.getLogger()
+
 
 class ImageGenerator:
     """
@@ -143,33 +145,35 @@ def bezier_curve(points, n_times=50):
 
     return x_vals, y_vals
 
+
 ## keypoint scale from Albumentations library
 
 def apply_keypoints_scale(keypoints: Sequence[Sequence[float]],
                           img_size: Tuple[int, int],
-                         target_size:Tuple[int, int],
-                         dtype = int):
-    return [apply_keypoint_scale(keypoint, img_size=img_size, target_size=target_size, dtype=dtype) for keypoint in keypoints]
+                          target_size: Tuple[int, int]):
+    return [apply_keypoint_scale(keypoint, img_size=img_size, target_size=target_size) for keypoint in
+            keypoints]
 
 
 def apply_keypoint_scale(keypoint: Sequence[float],
                          img_size: Tuple[int, int],
-                         target_size:Tuple[int, int],
-                         dtype = int):
-    scale_x,scale_y = get_scale_factor(img_size, target_size)
-    return keypoint_scale(keypoint, scale_x, scale_y, dtype)
+                         target_size: Tuple[int, int]):
+    scale_x, scale_y = get_scale_factor(img_size, target_size)
+    return keypoint_scale(keypoint, scale_x, scale_y)
 
-def get_scale_factor(img_size: Tuple[int, int], target_size:Tuple[int, int]):
+
+def get_scale_factor(img_size: Tuple[int, int], target_size: Tuple[int, int]):
     width, height = img_size
     target_width, target_height = target_size
     scale_x = target_width / width
     scale_y = target_height / height
     return scale_x, scale_y
 
+
 def keypoint_scale(keypoint: Sequence[float],
                    scale_x: float,
                    scale_y: float,
-                   dtype= int):
+                   dtype: Union[Type[int], Type[float]] = int):
     """Scales a keypoint by scale_x and scale_y.
     Args:
         keypoint (tuple): A keypoint `(x, y)`.
@@ -180,7 +184,7 @@ def keypoint_scale(keypoint: Sequence[float],
         A keypoint `(x, y, angle, scale)`.
     """
     x, y = keypoint[:2]
-    if dtype == int:
+    if isinstance(x, int) & isinstance(y, int):
         return int(x * scale_x), int(y * scale_y)
     else:
         return x * scale_x, y * scale_y
