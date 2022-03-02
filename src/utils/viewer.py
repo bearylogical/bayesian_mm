@@ -107,11 +107,15 @@ def display_composite(img: np.ndarray,
     plt.show()
 
 
-def _plot_keypoints(ax : plt.Axes, coords:np.ndarray, marker_size=3, label='Ground Truth'):
+def _plot_keypoints(ax : plt.Axes,
+                    coords:np.ndarray,
+                    marker_size=3,
+                    label='Ground Truth',
+                    marker_fmt='mo'):
     for idx, (t_x, t_y) in enumerate(coords):
         if idx != 0:
             label = None
-        ax.plot(t_x, t_y, 'mo', ms=marker_size, label=label)
+        ax.plot(t_x, t_y, marker_fmt, ms=marker_size, label=label)
         ax.annotate(f'{idx}', (t_x, t_y))
 
 
@@ -146,7 +150,7 @@ def display_img_coords(img: np.ndarray,
 
     if pred_coords is not None:
         pred_coords = pred_coords.reshape(7, 2)
-        _plot_keypoints(ax, pred_coords, marker_size, 'Predicted')
+        _plot_keypoints(ax, pred_coords, marker_size, 'Predicted', marker_fmt='cx')
 
     plt.legend()
     plt.axis('off')
@@ -214,7 +218,7 @@ def display_predictions(model: Model,
 
         ax.ravel()[i].imshow(img, origin='lower', cmap='gray', aspect='auto')
         _plot_keypoints(ax.ravel()[i], true_coords, label='Ground Truth')
-        _plot_keypoints(ax.ravel()[i], pred_coords, label='Predicted')
+        _plot_keypoints(ax.ravel()[i], pred_coords, label='Predicted', marker_fmt='cx')
         ax.ravel()[i].legend()
         ax.ravel()[i].set_axis_off()
     plt.tight_layout()
