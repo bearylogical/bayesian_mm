@@ -82,21 +82,37 @@ def get_bb_box_outputs(coords: Union[Tuple[int], np.ndarray]):
     return coords[:2], w, -h
 
 
-def display_composite(img: Image.Image,
+def display_composite(img: np.ndarray,
                       bb_box_coords: Union[Tuple[int], np.ndarray],
                       coords: Union[np.ndarray, None],
                       marker_size: int = 3):
-    fig = plt.figure(figsize=get_figsize(*img.size))
+    fig = plt.figure(figsize=get_figsize(*img.shape))
     ax = fig.add_axes([0, 0, 1, 1])
     ax.imshow(img, origin='lower', cmap='gray', aspect='auto')
-    xy, width, height = get_bb_box_outputs(bb_box_coords)
+    bb_min, bb_max = np.amin(bb_box_coords), np.amax(bb_box_coords)
+    if bb_max <= 1 and bb_min >= 0:
+        x, y, width, height = A.convert_bbox_from_albumentations(bb_box_coords,
+                                           target_format='coco',
+                                           rows=img.shape[0], cols=img.shape[1])
+        xy = (x, y)
+    else:
+        xy, width, height = get_bb_box_outputs(bb_box_coords)
     rect = Rectangle(xy, width, height, fill=False, linewidth=1, edgecolor='red')
 
     ax.add_patch(rect)
     coords = coords.reshape(7, 2)
-    ax.plot(coords[:, 0], coords[:, 1], 'mo', ms=marker_size)
+    _plot_keypoints(ax, coords, marker_size, label='Ground Truth')
+
     plt.axis('off')
     plt.show()
+
+
+def _plot_keypoints(ax : plt.Axes, coords:np.ndarray, marker_size=3, label='Ground Truth'):
+    for idx, (t_x, t_y) in enumerate(coords):
+        if idx != 0:
+            label = None
+        ax.plot(t_x, t_y, 'mo', ms=marker_size, label=label)
+        ax.annotate(f'{idx}', (t_x, t_y))
 
 
 def display_img_coords(img: Image.Image,
@@ -116,19 +132,21 @@ def display_img_coords(img: Image.Image,
     :return:
     """
 
-    true_coords = true_coords.reshape(7, 2)
+
 
     if true_coords is None and pred_coords is None:
         raise Exception('No coords supplied!')
 
-    fig = plt.figure(figsize=get_figsize(*img.size))
+    fig = plt.figure(figsize=get_figsize(*img.shape))
     ax = fig.add_axes([0, 0, 1, 1])
     ax.imshow(img, origin='lower', cmap='gray', aspect='auto')
-    ax.plot(true_coords[:, 0], true_coords[:, 1], 'mo', ms=marker_size, label='Ground Truth')
+
+    true_coords = true_coords.reshape(7, 2)
+    _plot_keypoints(ax, true_coords, marker_size, 'Ground Truth')
 
     if pred_coords is not None:
         pred_coords = pred_coords.reshape(7, 2)
-        ax.plot(pred_coords[:, 0], pred_coords[:, 1], 'cx', ms=marker_size, label='Predicted')
+        _plot_keypoints(ax, pred_coords, marker_size, 'Predicted')
 
     plt.legend()
     plt.axis('off')
@@ -155,7 +173,7 @@ def display_augmentations(dataset: RegressionDataLoaderT1, batch_idx=0, idx=0, s
         trans_image, trans_y = dataset_copy[batch_idx][:]
         trans_y = trans_y[idx].reshape(7, 2)
         ax.ravel()[i].imshow(trans_image[idx], origin='lower', cmap='gray', aspect='auto')
-        ax.ravel()[i].plot(trans_y[:, 0], trans_y[:, 1], 'mo', ms=2, label='Ground Truth')
+        _plot_keypoints(ax.ravel()[i], trans_y)
         ax.ravel()[i].legend()
         ax.ravel()[i].set_axis_off()
     plt.tight_layout()
@@ -167,7 +185,7 @@ def display_predictions(model: Model,
                         num_images:int=10,
                         rows:int=2,
                         img_size:Tuple[int, int] = (128,128),
-                        target_size: Union[Tuple[int, int], None]= (400, 400)):
+                        target_size: Union[Tuple[int, int], None]= (400, 400),):
 
     if not isinstance(model, Model):
         raise Exception(f'Incorrect object type of model ({type(model)})')
@@ -195,8 +213,8 @@ def display_predictions(model: Model,
             pred_coords = pred_coords * target_scale
 
         ax.ravel()[i].imshow(img, origin='lower', cmap='gray', aspect='auto')
-        ax.ravel()[i].plot(true_coords[:, 0], true_coords[:, 1], 'mo', ms=2, label='Ground Truth')
-        ax.ravel()[i].plot(pred_coords[:, 0], pred_coords[:, 1], 'cx', ms=2, label='Predicted')
+        _plot_keypoints(ax.ravel()[i], true_coords, label='Ground Truth')
+        _plot_keypoints(ax.ravel()[i], pred_coords, label='Predicted')
         ax.ravel()[i].legend()
         ax.ravel()[i].set_axis_off()
     plt.tight_layout()
@@ -205,9 +223,9 @@ def display_predictions(model: Model,
 if __name__ == "__main__":
     # from pathlib import Path
     #
-    # img_path = Path('dataset/20220228/images/train')
+    # img_path = Path('dataset/20220302/images/train')
     # data_path = img_path / 'targets.npz'
-    # sample_img = img_path / '1.png'
+    # sample_img = img_path / '6.png'
     #
     # from src.utils.loader import get_img_target_data
     #
@@ -215,19 +233,22 @@ if __name__ == "__main__":
     # _, bb_data = get_img_target_data(sample_img, data_path, task="T2")
     # t_coords = np.array([v for v in data.values()])
     # bb_data = np.array([v for v in bb_data.values()])
-    # # display_composite(t_img, bb_box_coords=bb_data, coords=t_coords)
-    # import numpy as np
+    # display_composite(t_img, bb_box_coords=bb_data, coords=t_coords)
+    # # import numpy as np
     # pred_coords = np.random.randint(-5, 5, size=t_coords.size) + t_coords
     # display_img_coords(t_img, t_coords, None)
     #
-    # img_dir = 'dataset/20220228/images/train'
-    # img_paths = get_image_paths_from_dir(img_dir)
-    # target_path = 'dataset/20220228/images/train/targets.npz'
-    #
-    # train_gen = RegressionDataLoaderT1(input_img_paths=img_paths,task='T1', batch_size=2, img_size=(128,128), target_paths=target_path)
-    # display_augmentations(train_gen)
-    from train import load_model
-    sample_model = load_model("dataset/sample/3x3and5x5Filter_20220301_1259")
+    img_dir = 'dataset/20220302/images/train'
+    img_paths = get_image_paths_from_dir(img_dir)
+    target_path = 'dataset/20220302/images/train/targets.npz'
 
-    img_dir = 'dataset/20220301/images/train'
-    display_predictions(sample_model, img_dir)
+    train_gen = RegressionDataLoaderT1(input_img_paths=img_paths,
+                                       task='T1',
+                                       batch_size=2,
+                                       img_size=(128,128), target_paths=target_path)
+    display_augmentations(train_gen)
+    # from train import load_model
+    # sample_model = load_model("dataset/sample/3x3and5x5Filter_20220301_1259")
+    #
+    # img_dir = 'dataset/20220301/images/train'
+    # display_predictions(sample_model, img_dir)
