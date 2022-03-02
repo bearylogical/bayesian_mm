@@ -1,9 +1,10 @@
 import random
 from PIL import Image, ImageDraw
-from src.utils.shapes.shapes import ImageGenerator
+from src.utils.shapes.shapes import ImageGenerator, apply_keypoints_scale, get_scale_factor
 from src.utils.utilities import get_PIL_version
 from itertools import product, chain
 import numpy as np
+from albumentations.augmentations.bbox_utils import convert_bbox_to_albumentations
 from skimage.draw import line, circle_perimeter
 from typing import Tuple, Union, Dict
 from pathlib import Path
@@ -13,6 +14,9 @@ import random
 
 
 class InvalidBoundError(Exception):
+    pass
+
+class GeometryError(Exception):
     pass
 
 
@@ -185,9 +189,10 @@ class CapillaryImage:
 
         # get geometry of deformed particle
         # need to find intersection of x, y coord with line
-        ind_def = (x_L1 >= b1_x1) & (x_L1 <= b2_x1)
-        x_L1_v, y_L1_v = x_L1[ind_def], y_L1[ind_def]
-        x_L2_v, y_L2_v = x_L2[ind_def], y_L2[ind_def]
+        x_ind_def = (x_L1 >= b1_x1) & (x_L1 <= b2_x1)
+        y_ind_def = (y_L1 <= b1_y1) & (y_L1 >= b2_x1)
+        x_L1_v, y_L1_v = x_L1[x_ind_def], y_L1[x_ind_def]
+        x_L2_v, y_L2_v = x_L2[y_ind_def], y_L2[y_ind_def]
         b1_intersect = b1_xf <= min(x_L1_v)
 
         x_v = np.concatenate([b1_xf, x_L1_v, b2_xf, x_L2_v])
@@ -285,11 +290,6 @@ class CapillaryImage:
         draw.line(list(np.ravel(coords_L2, 'F')), fill=self.fill_line, width=self.capillary_line_width)
         draw.line(coords_b3, fill=self.fill_line, joint='curve', width=self.capillary_line_width)
 
-        # draw.polygon(list(np.ravel(coords_EL,'F')),
-        #              fill=None,
-        #              outline=int(self.fill_alpha_outer * 255))
-
-        #
         if is_annotate:
             # text_kwargs = dict(ha="left", va="center", rotation=0, size=10)
             draw.text(
@@ -305,20 +305,22 @@ class CapillaryImageGenerator(ImageGenerator):
     Generator to spit out capillary images
     """
 
-    def __init__(self, save_dir=None, num_images: int = 1, target_size: Tuple[int, int]=  (400, 400), **kwargs):
+    def __init__(self, save_dir=None,
+                 num_images: int = 1,
+                 target_size: Tuple[int, int]=(1200, 1200), **kwargs):
         super(CapillaryImageGenerator, self).__init__(save_dir, **kwargs)
         self.num_images = num_images
-        self.UPSCALE = 3
         self.target_size = target_size
 
         # generator params
+        self._generated_resolution = (1200, 1200)
+        self.scale = get_scale_factor(self._generated_resolution, self.target_size)
 
     def generate(self):
-        available_theta = [4]
-
-        available_ref_coord = [(200 * 3, 50 * 3), ]
-        available_l_band = np.linspace(1, 20 * 3, num=self.num_images, dtype=int)
-        available_taper_c1_dist = np.linspace(80 * 3, 150 * 3, num=self.num_images, dtype=int)
+        available_theta = np.linspace(2, 6, num=self.num_images, dtype=int)
+        available_ref_coord = [(600, 150)]
+        available_l_band = np.linspace(1,60, num=self.num_images, dtype=int)
+        available_taper_c1_dist = np.linspace(240,450, num=self.num_images, dtype=int)
 
         parameter_space = product(available_ref_coord,
                                   available_l_band,
@@ -352,19 +354,19 @@ class CapillaryImageGenerator(ImageGenerator):
         T1_coords = [[(f'x{x}', 'i4'), (f'y{x}', 'i4')] for x in range(7)]
         T1_dtypes.extend(list(chain.from_iterable(T1_coords)))
 
-        T2_dtypes = [idx_dtype, (f'x_min', 'i4'), (f'y_min', 'i4'), (f'x_max', 'i4'), (f'y_max', 'i4')]
+        T2_dtypes = [idx_dtype, (f'x_min', 'f4'), (f'y_min', 'f4'), (f'x_max', 'f4'), (f'y_max', 'f')]
 
         res_T0 = np.zeros(len(selected_params),
                           dtype=T0_dtypes)
         res_T1 = np.zeros(len(selected_params), dtype=T1_dtypes)
         res_T2 = np.zeros(len(selected_params), dtype=T2_dtypes)
-        scale = None
+
         for idx, param in enumerate(tqdm(selected_params)):
             capillary = CapillaryImage(yx_r=param[0],
                                        l_band=param[1],
                                        taper_to_c1_dist=param[2],
                                        theta=param[3],
-                                       img_size=(1200, 1200),
+                                       img_size=self._generated_resolution,
                                        taper_dist=300)
 
             temp_image = Image.new(mode='L', size=capillary.dim, color=255)
@@ -372,19 +374,21 @@ class CapillaryImageGenerator(ImageGenerator):
             capillary.generate_image(temp_image, is_annotate=False)
 
             img_fp = str(save_dir / str(idx).zfill(len(str(len(selected_params))))) + '.png'
-            if scale is None:
-                scale = capillary.dim[0] // self.target_size[0]
             # temp_image = temp_image.resize(size=(capillary.dim[0] * 3, capillary.dim[1] * 3), resample=Image.ANTIALIAS)
 
-            temp_image.thumbnail(size=(capillary.dim[0] // scale, capillary.dim[1] // scale), resample=Image.ANTIALIAS)
+            # convert to numpy array
+
+            temp_image.thumbnail(size=self.target_size, resample=Image.ANTIALIAS)
             # plt.autoscale(tight=True)
             temp_image.save(img_fp)
             res_T0[idx] = np.array([(idx, capillary.l_band, capillary.r_band, capillary.volume, capillary.theta)],
                                    dtype=T0_dtypes)
 
-            res_T1[idx] = np.array([(idx, *capillary.coords / scale)], dtype=T1_dtypes)
-
-            res_T2[idx] = np.array([(idx, *capillary.bounding_box / scale)], dtype=T2_dtypes)
+            res_T1[idx] = np.array([(idx, *(capillary.coords * np.repeat(self.scale, 7)))], dtype=T1_dtypes)
+            res_T2[idx] = np.array([(idx, *convert_bbox_to_albumentations(capillary.bounding_box,
+                                                                          'pascal_voc',
+                                                                          rows=self._generated_resolution[0],
+                                                                          cols=self._generated_resolution[1]))], dtype=T2_dtypes)
 
         res_fp = str(save_dir / 'targets')
         np.savez(res_fp, T0=res_T0, T1=res_T1, T2=res_T2, allow_pickle=False)
@@ -427,5 +431,6 @@ if __name__ == "__main__":
     # fig, ax = plt.subplots()
     # single_cap.generate_image(ax)
     # plt.show()
-    cap = CapillaryImageGenerator(save_dir=None, num_images=10, force_images=True, target_size=(128, 128))
+    cap = CapillaryImageGenerator(save_dir=None, num_images=10, force_images=True, target_size=(400, 400))
     cap.generate()
+    # a = apply_keypoints_scale(((200.0,200.0) ,(200.0, 200.0)), (400, 400), (1200, 1200))
