@@ -143,18 +143,18 @@ class RegressionDataLoaderT1(BaseRegressionDataLoader):
         x = self._get_input_image_data(batch_input_img_paths)
         y = self._get_target_data(batch_input_img_idx, fields=self.fields)
 
+        if self.transform is not None:
+            for idx, (_xi, _yi) in enumerate(zip(x, y)):
+                _transformed = self.transform(image=_xi, keypoints=_yi.reshape(7, 2))
+                x[idx] = _transformed['image']
+                y[idx] = np.array(_transformed['keypoints']).flatten()
+
         if self.normalize:
             if self.img_size[0] != self.img_size[1]:
                 raise DataLoaderError(f"Image size not equal:"
                                       f"{self.img_size[0]} "
                                       f"not equal to {self.img_size[1]}")
             y = normalize(y, float(self.img_size[0]))
-
-        if self.transform is not None:
-            for idx, (_xi, _yi) in enumerate(zip(x, y)):
-                _transformed = self.transform(image=_xi, keypoints=_yi.reshape(7, 2))
-                x[idx] = _transformed['image']
-                y[idx] = np.array(_transformed['keypoints']).flatten()
 
         return x, y
 

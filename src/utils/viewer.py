@@ -164,6 +164,7 @@ def display_augmentations(dataset: RegressionDataLoaderT1, batch_idx=0, idx=0, s
 
     dataset_copy = copy.deepcopy(dataset)
 
+
     rows = samples // cols
     figure, ax = plt.subplots(nrows=rows, ncols=cols, figsize=(12, 6))
     for i in range(samples):
@@ -176,6 +177,8 @@ def display_augmentations(dataset: RegressionDataLoaderT1, batch_idx=0, idx=0, s
                                                                                 angle_in_degrees=True))
         trans_image, trans_y = dataset_copy[batch_idx][:]
         trans_y = trans_y[idx].reshape(7, 2)
+        if dataset.normalize:
+            trans_y = trans_y * np.repeat(dataset.img_size, 7).reshape(-1, 2)
         ax.ravel()[i].imshow(trans_image[idx], origin='lower', cmap='gray', aspect='auto')
         _plot_keypoints(ax.ravel()[i], trans_y)
         ax.ravel()[i].legend()
@@ -207,8 +210,8 @@ def display_predictions(model: Model,
 
     for i in range(num_images):
         img, coords = get_img_target_data(rand_imgs[i], data_path, img_size)
-        true_coords = np.array([v for v in coords.values()]).reshape(7, 2)
-        pred_coords = model.predict(prepare_img_prediction(img)).reshape(7, 2)
+        true_coords = np.array([v for v in coords.values()]).reshape(7, 2) * np.repeat(target_size, 7).reshape(-1, 2)
+        pred_coords = model.predict(prepare_img_prediction(img)).reshape(7, 2) * np.repeat(target_size, 7).reshape(-1, 2)
 
         if target_size is not None:
             img = cv2.resize(img, target_size)
@@ -242,15 +245,16 @@ if __name__ == "__main__":
     pred_coords = np.random.randint(-5, 5, size=t_coords.size) + t_coords
     display_img_coords(t_img, t_coords, None)
     # #
-    # img_dir = 'dataset/20220302/images/train'
-    # img_paths = get_image_paths_from_dir(img_dir)
-    # target_path = 'dataset/20220302/images/train/targets.npz'
-    #
-    # train_gen = RegressionDataLoaderT1(input_img_paths=img_paths,
-    #                                    task='T1',
-    #                                    batch_size=2,
-    #                                    img_size=(128,128), target_paths=target_path)
-    # display_augmentations(train_gen)
+    img_dir = 'dataset/20220302/images/train'
+    img_paths = get_image_paths_from_dir(img_dir)
+    target_path = 'dataset/20220302/images/train/targets.npz'
+
+    train_gen = RegressionDataLoaderT1(input_img_paths=img_paths,
+                                       task='T1',
+                                       batch_size=2,
+                                       img_size=(128,128), target_paths=target_path,
+                                       normalize=True)
+    display_augmentations(train_gen)
     # from train import load_model
     # sample_model = load_model("dataset/sample/3x3and5x5Filter_20220301_1259")
     #
