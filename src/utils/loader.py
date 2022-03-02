@@ -263,8 +263,11 @@ def get_img_target_data(img_path: Union[str, Path], data_path: Union[str, Path],
     :param include_idx: Include the id col
     :return:
     """
-    img = cv2.imread(img_path, cv2.IMREAD_GRAYSCALE)  # should be given
-    img = cv2.resize(img, img_size, interpolation=cv2.INTER_AREA)
+    if isinstance(img_path, Path):
+        img_path = str(img_path)
+    img = cv2.imread(img_path, cv2.IMREAD_GRAYSCALE)
+    if img_size is not None:# should be given
+        img = cv2.resize(img, img_size, interpolation=cv2.INTER_AREA)
     img_idx = get_idx_from_img_path(img_path)  # should be given
 
     data_path_ext = os.path.splitext(data_path)[-1]
