@@ -3,3 +3,6 @@
 /tests/.pytest_cache/
 /.vscode/
 /.pytest_cache/
+wandb/
+/wandb/
+/.idea/
