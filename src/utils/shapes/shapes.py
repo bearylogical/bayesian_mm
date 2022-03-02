@@ -1,12 +1,11 @@
 import numpy as np
 from PIL import Image
 from pathlib import Path
-from typing import Union, Tuple, Type
+from typing import Union, Tuple, Type, Sequence
 from time import strftime
 from scipy.special import comb
 import shutil
 import logging
-from collections.abc import Sequence
 
 logger = logging.getLogger()
 
