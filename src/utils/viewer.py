@@ -210,7 +210,7 @@ def display_predictions(model: Model,
 
     for i in range(num_images):
         img, coords = get_img_target_data(rand_imgs[i], data_path, img_size)
-        true_coords = np.array([v for v in coords.values()]).reshape(7, 2) * np.repeat(target_size, 7).reshape(-1, 2)
+        true_coords = np.array([v for v in coords.values()]).reshape(7, 2)
         pred_coords = model.predict(prepare_img_prediction(img)).reshape(7, 2) * np.repeat(target_size, 7).reshape(-1, 2)
 
         if target_size is not None:
