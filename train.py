@@ -57,7 +57,7 @@ def train_test_split(train_img_dir, test_img_dir, data_loader, **kwargs):
     assert train_data_path.is_file() and test_data_path.is_file()
 
     train_gen = data_loader(input_img_paths=train_img_paths, target_paths=train_data_path, **kwargs)
-    test_gen = data_loader(input_img_paths=test_img_paths, target_paths=test_data_path, **kwargs)
+    test_gen = data_loader(input_img_paths=test_img_paths, target_paths=test_data_path, transform=None, **kwargs)
     logger.debug("Data Loaders created")
     return train_gen, test_gen
 
