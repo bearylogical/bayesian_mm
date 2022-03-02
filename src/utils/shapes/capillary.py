@@ -317,10 +317,10 @@ class CapillaryImageGenerator(ImageGenerator):
         self.scale = get_scale_factor(self._generated_resolution, self.target_size)
 
     def generate(self):
-        available_theta = np.linspace(2, 6, num=self.num_images, dtype=int)
+        available_theta = np.unique(np.linspace(2, 6, num=self.num_images, dtype=int))
         available_ref_coord = [(600, 150)]
-        available_l_band = np.linspace(1,60, num=self.num_images, dtype=int)
-        available_taper_c1_dist = np.linspace(240,450, num=self.num_images, dtype=int)
+        available_l_band = np.unique(np.linspace(1,120, num=self.num_images, dtype=int))
+        available_taper_c1_dist = np.unique(np.linspace(240,450, num=self.num_images, dtype=int))
 
         parameter_space = product(available_ref_coord,
                                   available_l_band,
@@ -431,6 +431,6 @@ if __name__ == "__main__":
     # fig, ax = plt.subplots()
     # single_cap.generate_image(ax)
     # plt.show()
-    cap = CapillaryImageGenerator(save_dir=None, num_images=10, force_images=True, target_size=(400, 400))
+    cap = CapillaryImageGenerator(save_dir=None, num_images=1000, force_images=True, target_size=(400, 400))
     cap.generate()
     # a = apply_keypoints_scale(((200.0,200.0) ,(200.0, 200.0)), (400, 400), (1200, 1200))
