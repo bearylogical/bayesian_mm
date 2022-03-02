@@ -223,30 +223,30 @@ def display_predictions(model: Model,
 if __name__ == "__main__":
     # from pathlib import Path
     #
-    # img_path = Path('dataset/20220302/images/train')
-    # data_path = img_path / 'targets.npz'
-    # sample_img = img_path / '6.png'
+    img_path = Path('dataset/20220302/images/train')
+    data_path = img_path / 'targets.npz'
+    sample_img = img_path / '006.png'
     #
-    # from src.utils.loader import get_img_target_data
+    from src.utils.loader import get_img_target_data
     #
-    # t_img, data = get_img_target_data(sample_img, data_path, task="T1")
+    t_img, data = get_img_target_data(sample_img, data_path, task="T1")
     # _, bb_data = get_img_target_data(sample_img, data_path, task="T2")
-    # t_coords = np.array([v for v in data.values()])
+    t_coords = np.array([v for v in data.values()])
     # bb_data = np.array([v for v in bb_data.values()])
     # display_composite(t_img, bb_box_coords=bb_data, coords=t_coords)
-    # # import numpy as np
-    # pred_coords = np.random.randint(-5, 5, size=t_coords.size) + t_coords
-    # display_img_coords(t_img, t_coords, None)
+    import numpy as np
+    pred_coords = np.random.randint(-5, 5, size=t_coords.size) + t_coords
+    display_img_coords(t_img, t_coords, None)
+    # #
+    # img_dir = 'dataset/20220302/images/train'
+    # img_paths = get_image_paths_from_dir(img_dir)
+    # target_path = 'dataset/20220302/images/train/targets.npz'
     #
-    img_dir = 'dataset/20220302/images/train'
-    img_paths = get_image_paths_from_dir(img_dir)
-    target_path = 'dataset/20220302/images/train/targets.npz'
-
-    train_gen = RegressionDataLoaderT1(input_img_paths=img_paths,
-                                       task='T1',
-                                       batch_size=2,
-                                       img_size=(128,128), target_paths=target_path)
-    display_augmentations(train_gen)
+    # train_gen = RegressionDataLoaderT1(input_img_paths=img_paths,
+    #                                    task='T1',
+    #                                    batch_size=2,
+    #                                    img_size=(128,128), target_paths=target_path)
+    # display_augmentations(train_gen)
     # from train import load_model
     # sample_model = load_model("dataset/sample/3x3and5x5Filter_20220301_1259")
     #
