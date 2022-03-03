@@ -179,7 +179,7 @@ def display_augmentations(dataset: RegressionDataLoaderT1, batch_idx=0, idx=0, s
         trans_y = trans_y[idx].reshape(7, 2)
         if dataset.normalize:
             trans_y = trans_y * np.repeat(dataset.img_size, 7).reshape(-1, 2)
-        ax.ravel()[i].imshow(trans_image[idx], origin='lower', cmap='gray', aspect='auto')
+        ax.ravel()[i].imshow(np.squeeze(trans_image[idx]), origin='lower', cmap='gray', aspect='auto')
         _plot_keypoints(ax.ravel()[i], trans_y)
         ax.ravel()[i].legend()
         ax.ravel()[i].set_axis_off()
