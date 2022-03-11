@@ -2,7 +2,7 @@ import numpy as np
 from dataclasses import dataclass
 from typing import List, Union
 from copy import deepcopy
-from constants import PRESSURE_CONSTANT_MULTIPLIER, BULK_MODULUS
+from src.utils.constants import PRESSURE_CONSTANT_MULTIPLIER, BULK_MODULUS
 import matplotlib.pyplot as plt
 
 
