@@ -1,13 +1,18 @@
 import copy
+import os
 
 import cv2
 import numpy as np
 import matplotlib.pyplot as plt
+from scipy.stats import cumfreq
 from skimage.draw import line
 from src.utils.mechanics import Point
 from src.utils.shapes.capillary import sort_xy
+from src.utils.transforms import reject_outliers, normalize
 import random
-from typing import List, Tuple
+from pathlib import Path
+from time import strftime
+from typing import List, Tuple, Union
 
 
 def countour_thresh(img, val=10):
@@ -88,7 +93,6 @@ def preprocess_lines(img: np.ndarray,
 
 
 def draw_capillary_outline(img_arr: np.ndarray, params: dict) -> np.ndarray:
-
     _, w = img_arr.shape
     lb = params["lb"]
 
@@ -104,7 +108,7 @@ def line_start_end_from_params(slope: float,
                                intercept: float,
                                x_start: float, x_end: float) -> np.ndarray:
     return np.array([x_start, slope * x_start + intercept,
-                       x_end, slope * x_end + intercept], dtype=int)
+                     x_end, slope * x_end + intercept], dtype=int)
 
 
 def draw_line(img_arr: np.ndarray,
@@ -135,30 +139,56 @@ class CapillaryStruct:
         self.params["lb"] = self.lb
 
 
-def get_line_intensity(img_arr:np.ndarray, line_coords:Tuple[np.ndarray]):
-
+def get_line_intensity(img_arr: np.ndarray,
+                       line_coords: Tuple[np.ndarray],
+                       start: Union[None, float] = None,
+                       end: Union[None, float] = None,
+                       is_normalize: bool = True):
     _intensity = np.zeros(shape=len(line_coords[0]))
+
+    if start is None:
+        start = 0
+    else:
+        start = int(start * len(_intensity))
+
+    if end is None:
+        end = -1
+    else:
+        end = 1 - int(end * len(_intensity))
 
     for idx, (r, c) in enumerate(zip(*line_coords)):
         try:
-            _intensity[idx] = img_arr[r,c]
+            _intensity[idx] = img_arr[r, c]
         except IndexError:
             pass
 
+    _intensity = _intensity[start:end]
+
+    if is_normalize:
+        _intensity = normalize(_intensity)
+
     return _intensity
 
-def plot_line_intensity(img_arr:np.ndarray, line_arr:np.ndarray):
 
+def get_edge_threshold():
+    pass
+
+
+def plot_line_intensity(img_arr: np.ndarray,
+                        line_arr: np.ndarray):
     _img_arr = copy.deepcopy(img_arr)
     line_coords = line(line_arr[1], line_arr[0], line_arr[3], line_arr[2])
-    intensities = get_line_intensity(_img_arr, line_coords)
+    intensities = get_line_intensity(_img_arr,
+                                     line_coords,
+                                     start=0.01,
+                                     end=0.01)
 
-    fig, [ax1, ax2] = plt.subplots(1, 2, figsize=(6,4))
+    fig, [ax1, ax2] = plt.subplots(1, 2, figsize=(6, 4))
     _img_arr = draw_line(_img_arr, line_arr)
     ax1.set_title("Raw Image with line overlay")
     ax1.imshow(_img_arr, cmap='gray')
     ax2.set_title("Intensity vs Position")
-    ax2.set_ylabel("Intensity")
+    ax2.set_ylabel("Intensity (Normalized)")
     ax2.set_xlabel("Position")
     ax2.plot(range(len(intensities)), intensities)
 
@@ -166,7 +196,9 @@ def plot_line_intensity(img_arr:np.ndarray, line_arr:np.ndarray):
     plt.show()
     # return 1
 
-def get_region_of_interest(img_arr:np.ndarray, params:dict):
+
+def get_region_of_interest(img_arr: np.ndarray,
+                           params: dict):
     _, w = img_arr.shape
     lb = params["lb"]
     #
@@ -187,18 +219,71 @@ def get_region_of_interest(img_arr:np.ndarray, params:dict):
     sorted_points = sort_xy(points[:, 1], points[:, 0])
     return np.array(sorted_points).T
 
-def isolate_particle(img_arr:np.ndarray, points:np.ndarray):
 
-    if points.ndim != 2 :
+def isolate_particle(img_arr: np.ndarray,
+                     points: np.ndarray,
+                     min_threshold: int = 50) -> np.ndarray:
+    """
+
+    :param img_arr:
+    :param points:
+    :param min_threshold:
+    :return: Numpy image array
+    """
+    if points.ndim != 2:
         raise Exception("Incorrect dimension")
 
     _img_arr = copy.deepcopy(img_arr)
     mask = np.zeros(_img_arr.shape[:2], dtype="uint8")
-
+    white_bg = np.full(mask.shape, 255, dtype="uint8")
     cv2.fillPoly(mask, [points], color=255)
-    masked = cv2.bitwise_and(_img_arr, _img_arr, mask=mask)
+    mask_inv = cv2.bitwise_not(mask)
 
-    return masked
+    white_bg = cv2.bitwise_or(white_bg, white_bg, mask=mask_inv)
+    masked = cv2.bitwise_and(_img_arr, _img_arr, mask=mask)
+    _new_img = white_bg + masked
+    _new_img[_new_img < min_threshold] = 255
+
+    return _new_img
+
+
+def get_auto_contrast_params(img: np.ndarray,
+                             percentile: Tuple[int, int] = (0, 95)) -> Tuple[float, float]:
+    if percentile[0] > percentile[1]:
+        raise Exception("Percentile follows format: (lower, upper)")
+
+    img_hist, _, _, _ = cumfreq(img.ravel(), 256, [0, 256])
+
+    # get 5th percentile gray value
+    p_lower = np.argwhere(img_hist > np.percentile(img_hist, percentile[0]))[0].item()
+    # get 95th percentile gray value
+    p_upper = np.argwhere(img_hist > np.percentile(img_hist, percentile[1]))[0].item()
+
+    # solve ax=b to get phi and gamma
+    # we want things at p5 --> 0 and
+    # p95 --> 255
+
+    a = np.array([[p_lower, 1], [p_upper, 1]])
+    b = np.array([0, 255])
+
+    return tuple(np.linalg.solve(a, b).tolist())
+
+
+def apply_contrast(img: np.ndarray) -> np.ndarray:
+    """
+    Apply contrast to img according to transformation
+    g' = alpha * g + beta
+
+    :param img:
+    :param phi:
+    :param theta:
+    :return:
+    """
+    _img = copy.deepcopy(img)
+    a, b = get_auto_contrast_params(_img, (5, 70))
+
+    return cv2.convertScaleAbs(_img, alpha=a, beta=b)
+
 
 def get_mean_params(cap_structs: List[CapillaryStruct]) -> dict:
     """
@@ -214,21 +299,6 @@ def get_mean_params(cap_structs: List[CapillaryStruct]) -> dict:
         _params = reject_outliers(_params)
         params[k] = np.mean(_params, axis=0)
     return params
-
-
-def reject_outliers(data: np.ndarray, m=2) -> np.ndarray:
-    """
-    Rejects outliers that are at least 2 standard deviations away.
-    :param data:
-    :param m: Number of standard deviations to reject
-    :return:
-    """
-    mask = np.abs(data - np.mean(data, axis=0)) <= m * np.std(data, axis=0)
-
-    if data.ndim == 1:
-        return data[mask]
-    else:
-        return data[np.all(mask, axis=1)]
 
 
 def extend_line(line: np.ndarray, xcoord: int) -> np.ndarray:
@@ -266,7 +336,8 @@ def get_outer_edges(lines: np.ndarray):
     return lines[[ind_min, ind_max], :]
 
 
-def get_inner_edges(lines: np.ndarray, y_midpoint: int):
+def get_inner_edges(lines: np.ndarray,
+                    y_midpoint: int):
     """
     Get inner edges characterised by closest distance normal to midpoint line
     :param lines:
@@ -312,17 +383,58 @@ def get_intercept(slope: float, point: Point):
     return point.y - slope * point.x
 
 
-if __name__ == "__main__":
-    from pathlib import Path
+def plot_isolated_particle(img_arr: np.ndarray,
+                           params: dict):
+    _img_arr = copy.deepcopy(img_arr)
 
-    img_path = Path('dataset/StyleTransfer')
-    from src.utils.loader import get_image_paths_from_dir
+    points = get_region_of_interest(_img_arr, params)
+    _img_arr = isolate_particle(_img_arr, points)
+    _img_arr = apply_contrast(_img_arr)
 
-    imgs = get_image_paths_from_dir(img_path)
-    fig, ax = plt.subplots(3, 3, figsize=(8, 6))
-    # sample_img = img_path / '006.png'
-    img_paths = imgs[:6]
+    # _img_arr = cv2.Canny(_img_arr, 20, 300)
+    plt.imshow(_img_arr, cmap='gray')
+    plt.show()
+
+
+def save_and_apply_particle_isolation(img_paths: List[str],
+                                      params: dict,
+                                      save: bool = False,
+                                      save_dir: Union[str, Path, None] = None):
+    _imgs = []
+
+    if save:
+        if save_dir is None:
+            save_dir = Path(os.getcwd()) / 'dataset' / 'processed' / strftime("%Y%m%d")
+
+        if not isinstance(save_dir, Path):
+            save_dir = Path(save_dir)
+
+        save_dir.mkdir(parents=True, exist_ok=True)
+
+    for img in img_paths:
+        _img = cv2.imread(img, cv2.IMREAD_GRAYSCALE)
+        points = get_region_of_interest(_img, params)
+        _img = isolate_particle(_img, points)
+        _img = apply_contrast(_img)
+
+        if save:
+            fp = save_dir / Path(img).parts[-1]
+            cv2.imwrite(fp, _img)
+
+        _imgs.append(_img)
+
+
+def preprocess_sequence(img_paths: List[str]) -> dict:
+    """
+    Get relevant parameters from a sequence of images. The sequence should be
+    a list of image paths taken within one experiment.
+
+    :param img_paths:
+    :return: a dictionary containing the (mean) parameters to be used to isolate the capillary
+    """
+
     cap_structs = []
+
     for img_path in img_paths:
         _img = cv2.imread(str(img_path), cv2.IMREAD_GRAYSCALE)
         _, cap_struct = preprocess_lines(_img, show_original=True, debug=False)
@@ -330,30 +442,43 @@ if __name__ == "__main__":
             cap_structs.append(cap_struct)
 
     mean_params = get_mean_params(cap_structs)
-    for idx, img_path in enumerate(img_paths):
-        temp_ax = ax.ravel()[idx]
-        _img = cv2.imread(str(img_path), cv2.IMREAD_GRAYSCALE)
-        _img = draw_capillary_outline(_img, mean_params)
-        temp_ax.imshow(_img, cmap='gray')
-        temp_ax.set_xticklabels([])
-        temp_ax.set_yticklabels([])
-        temp_ax.set_aspect('equal')
 
-    plt.tight_layout()
-    plt.show()
-    plt.clf()
+    return mean_params
 
-    t_img = cv2.imread(str(img_paths[4]), cv2.IMREAD_GRAYSCALE)
-    param = mean_params["arr_2"]
+
+if __name__ == "__main__":
+    img_path = Path('dataset/StyleTransfer')
+    from src.utils.loader import get_image_paths_from_dir
+
+    imgs = get_image_paths_from_dir(img_path)
+
+    # sample_img = img_path / '006.png'
+    t_img_paths = imgs[:6]
+    mean_params = preprocess_sequence(t_img_paths)
+    save_and_apply_particle_isolation(t_img_paths, mean_params, save=True)
+
+    # fig, ax = plt.subplots(3, 3, figsize=(8, 6))
+    # for idx, img_path in enumerate(img_paths):
+    #     temp_ax = ax.ravel()[idx]
+    #     _img = cv2.imread(str(img_path), cv2.IMREAD_GRAYSCALE)
+    #     _img = draw_capillary_outline(_img, mean_params)
+    #     temp_ax.imshow(_img, cmap='gray')
+    #     temp_ax.set_xticklabels([])
+    #     temp_ax.set_yticklabels([])
+    #     temp_ax.set_aspect('equal')
+    #
+    # plt.tight_layout()
+    # plt.show()
+    # plt.clf()
+
+    t_img = cv2.imread(str(t_img_paths[2]), cv2.IMREAD_GRAYSCALE)
+    param = mean_params["arr_1"]
     lb = mean_params["lb"]
-    _ , w = t_img.shape
+    _, w = t_img.shape
     line_arr = line_start_end_from_params(param[0], param[1], lb, w)
-    plot_line_intensity(t_img, line_arr)
+    # plot_line_intensity(t_img, line_arr)
+    plot_isolated_particle(t_img, mean_params)
 
-    points = get_region_of_interest(t_img, mean_params)
-    t_img = isolate_particle(t_img, points)
-    plt.imshow(t_img, cmap='gray')
-    plt.show()
     # fig, ax = plt.subplots(3, 3, figsize=(8, 6))
     # # synthesized images , 60 low, ratio3
     # # lab images,
