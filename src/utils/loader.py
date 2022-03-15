@@ -1,16 +1,15 @@
 import os
 
 from tensorflow.keras.utils import Sequence
-from src.utils.constants import ACCEPTABLE_IMAGE_FORMATS, \
-    ACCEPTABLE_SEGMENTATION_FORMATS
+from src.utils.constants import ACCEPTABLE_IMAGE_FORMATS
 from src.utils.augmentations import default_aug
 import numpy as np
-from tensorflow.keras.preprocessing.image import load_img, img_to_array
+from tensorflow.keras.preprocessing.image import load_img
 from typing import List, Tuple, Union
-from PIL import Image
 from pathlib import Path
 import albumentations as A
 import cv2
+from src.utils.transforms import normalize
 
 VALID_TASKS = ["T0", "T1"]
 
@@ -178,11 +177,6 @@ class SegmentDataLoader(BaseDataLoader):
             img = load_img(path, target_size=self.img_size, color_mode="grayscale")
             y[j] = np.expand_dims(img, 2)
         return x, y
-
-
-def normalize(input_image: np.ndarray, max_val: float = 255.0):
-    input_image = input_image.astype("float32") / max_val
-    return input_image
 
 
 def prepare_img_prediction(img_arr: np.ndarray):
