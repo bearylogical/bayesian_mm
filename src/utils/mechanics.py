@@ -5,6 +5,8 @@ from copy import deepcopy
 from src.utils.constants import PRESSURE_CONSTANT_MULTIPLIER, BULK_MODULUS
 import matplotlib.pyplot as plt
 
+from src.utils.transforms import divide_by_zero
+
 
 @dataclass
 class Point:
@@ -183,16 +185,18 @@ class CapillaryStressBalance:
             self.l_bands[idx] = l_band
 
             cp, mcp = capillary_points[idx], mid_point_capillary_points[idx]
-            w_band = (dist_2D(cp.p1, cp.p2) + dist_2D(cp.p3, cp.p4)) / 2
+            w_band = (dist_2D(cp.p1, cp.p2) + dist_2D(cp.p3, cp.p4)) / 2 # avg slant length
 
             r_band_front = (dist_2D(cp.p1, mcp.p1) + dist_2D(cp.p3, mcp.p3)) / 2
             r_band_back = (dist_2D(cp.p2, mcp.p2) + dist_2D(cp.p4, mcp.p4)) / 2
             r_band = (r_band_back + r_band_front) / 2
             self.r_bands[idx] = r_band
 
-            c_temp = (r_band_back - r_band_front) / w_band
+            # c_temp = (r_band_back - r_band_front) / w_band
 
-            a_band = 2 * np.pi * (r_band_front * w_band + c_temp / 2 * w_band ** 2)
+            # why not use conical frustum?
+            a_band = np.pi * (r_band_front + r_band_back) * w_band
+            # a_band = 2 * np.pi * (r_band_front * w_band + c_temp / 2 * w_band ** 2)
             length = dist_2D(mcp.p5, mcp.p6)
             self.lengths[idx] = length
 
@@ -207,6 +211,7 @@ class CapillaryStressBalance:
             v_cap_back = np.pi * h_cap_back * (3 * a_cap_back ** 2 + h_cap_back ** 2) / 6
 
             total_length = l_band / (1 - (r_band_front / r_band_back))
+            # volume of frustum
             v_band = np.pi / 3 * (r_band_back ** 2 * total_length - r_band_front ** 2 * (total_length - l_band))
             volume = v_band + v_cap_back + v_cap_front
             self.volumes[idx] = volume
@@ -224,12 +229,12 @@ class CapillaryStressBalance:
 
     @staticmethod
     def calc_pressures(pressure, alpha, r_band_back, a_band):
-        f_p = pressure * (np.pi * r_band_back ** 2)  # force onto backside  by pressure
+        f_p = pressure * (np.pi * r_band_back ** 2)  # force onto back portion of particle by pressure
         f_wall = f_p / np.sin(alpha)
         p_wall = f_wall / a_band
         p_wall_min_p = p_wall - pressure
         # a_ratio = np.pi * r_band_back**2 / a_band
-        p_avg = (2 * p_wall + pressure) / 3
+        p_avg = (2 * p_wall + pressure) / 3 # x, y and z pressures.
 
         return p_wall, p_avg, p_wall_min_p
 
@@ -244,10 +249,10 @@ class CapillaryStressBalance:
         r_ref = (3 * self.volumes[0] / 4 / np.pi) ** (1 / 3)
         a_ref = np.pi * r_ref ** 2
 
-        eps_r = (self.r_bands[0] - self.r_bands) / self.r_bands[0]  # strain in the r direction
+        self.eps_r = (self.r_bands[0] - self.r_bands) / self.r_bands[0]  # strain in the r direction
 
         a_strain = divide_by_zero(a_ref - self.areas, self.areas)
-        eps_z = (self.l_bands[0] - self.l_bands) / self.l_bands[0]
+        self.eps_z = (self.l_bands[0] - self.l_bands) / self.l_bands[0]
         length_strain = (self.lengths[0] - self.lengths) / self.lengths[0]
 
         self.v_strain = (self.volumes[0] - self.volumes) / self.volumes[0]
@@ -256,17 +261,17 @@ class CapillaryStressBalance:
         v_strain_2 = divide_by_zero(self.v_strain - v_strain_1,
                                     1 - v_strain_1)  # volumetric strain after subtracting strain from pure compression
         length_strain_2 = divide_by_zero(length_strain - eps_1, 1 - eps_1)
-        eps_r_2 = divide_by_zero(eps_r - eps_1, 1 - eps_1)
+        eps_r_2 = divide_by_zero(self.eps_r - eps_1, 1 - eps_1)
 
-        self.eps_g = 2 * (eps_r - eps_z)
-        self.K_compressive = calc_K(self.wall_pressures, self.pressures, eps_r, eps_z)  # compressive modulus
-        self.G_shear = calc_G(self.wall_pressures, self.pressures, eps_r, eps_z)
+        self.eps_g = 2 * (self.eps_r - self.eps_z)
+        self.K_compressive = calc_K(self.wall_pressures, self.pressures, self.eps_r, self.eps_z)  # compressive modulus
+        self.G_shear = calc_G(self.wall_pressures, self.pressures, self.eps_r, self.eps_z)
 
         # step wise evaluation of compressive and shear stress
         delta_p_wall = self.wall_pressures - self.wall_pressures[0]
         delta_p = self.pressures - self.pressures[0]
-        K_compressive_stepwise = calc_K(delta_p_wall, delta_p, eps_r, eps_z)
-        G_shear_stepwise = calc_G(delta_p_wall, delta_p, eps_r, eps_z)
+        K_compressive_stepwise = calc_K(delta_p_wall, delta_p, self.eps_r, self.eps_z)
+        G_shear_stepwise = calc_G(delta_p_wall, delta_p, self.eps_r, self.eps_z)
 
         r_shape = self.r_bands[:-1] * (self.volumes[0] / self.volumes.T[:-1]) ** (1 / 3)
         # poisson_ratio = length_strain_2 / 4 / eps_r_2
@@ -305,8 +310,9 @@ class CapillaryStressBalance:
         return np.abs(b_top_from_fit - b_bott_from_fit) / 2
 
     @staticmethod
-    def _get_line_fits(x_coords, y_coords):
+    def _get_line_fits(x_coords, y_coords) -> list:
         # note, coeffients are presented in increasing degree
+        # so returns (slope, intercept)
         return np.polynomial.Polynomial.fit(x_coords, y_coords, 1, domain=[0, 1], window=[0, 1]).coef.tolist()
 
     def plot_figures(self):
@@ -343,32 +349,28 @@ class CapillaryStressBalance:
         plt.show()
 
 
-def divide_by_zero(num, den):
-    return np.divide(num, den, out=np.zeros_like(num), where=(den) != 0)
-
-
 def calc_K(p_wall, p, eps_r, eps_z):
     """
     Calculate K (compressive modulus) according to formula
 
-    :param p_wall:
-    :param p:
-    :param eps_r:
-    :param eps_z:
-    :return:
+    :param p_wall: Pressure on the capillary wall
+    :param p: Applied pressure
+    :param eps_r: strain in radial direction
+    :param eps_z: strain in longitudinal direction
+    :return: Compressive modulus
     """
-    return divide_by_zero(1 / 3 * (2 * p_wall - p), 2 * eps_r + eps_z)
+    return divide_by_zero(1 / 3 * (2 * p_wall + p), 2 * eps_r + eps_z)
 
 
 def calc_G(p_wall, p, eps_r, eps_z):
     """
     Calculate G (shear modulus) according to formula
 
-    :param p_wall:
-    :param p:
-    :param eps_r:
-    :param eps_z:
-    :return:
+    :param p_wall: Pressure on the capillary wall
+    :param p: Applied pressure
+    :param eps_r: strain in radial direction
+    :param eps_z: strain in longitudinal direction
+    :return: Shear modulus
     """
     return divide_by_zero(0.5 * (p_wall - p), eps_r - eps_z)
 

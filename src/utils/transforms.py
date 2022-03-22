@@ -19,3 +19,7 @@ def reject_outliers(data: np.ndarray, m=2) -> np.ndarray:
         return data[mask]
     else:
         return data[np.all(mask, axis=1)]
+
+
+def divide_by_zero(num, den):
+    return np.divide(num, den, out=np.zeros_like(num), where=(den) != 0)
