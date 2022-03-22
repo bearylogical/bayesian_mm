@@ -8,7 +8,7 @@ from scipy.stats import cumfreq
 from skimage.draw import line
 from src.utils.mechanics import Point
 from src.utils.shapes.capillary import sort_xy
-from src.utils.transforms import reject_outliers, normalize
+from src.utils.transforms import reject_outliers, normalize, divide_by_zero
 import random
 from pathlib import Path
 from time import strftime
@@ -269,20 +269,29 @@ def get_auto_contrast_params(img: np.ndarray,
     return tuple(np.linalg.solve(a, b).tolist())
 
 
-def apply_contrast(img: np.ndarray) -> np.ndarray:
+def apply_contrast(img: np.ndarray,
+                   method:str='auto') -> np.ndarray:
     """
     Apply contrast to img according to transformation
     g' = alpha * g + beta
 
     :param img:
-    :param phi:
-    :param theta:
+    :param method: Contrast application. Available methods:
+    'auto' - Clips the intensity for the 5 and 70th percentile of cumulative intensity counts
+    'clahe' - Applied the Contrast Limited Adaptive Histogram Equalization (CLAHE) algorithm for region
+    based contrast
     :return:
     """
+    method = method.lower()
     _img = copy.deepcopy(img)
-    a, b = get_auto_contrast_params(_img, (5, 70))
-
-    return cv2.convertScaleAbs(_img, alpha=a, beta=b)
+    if method =='auto':
+        a, b = get_auto_contrast_params(_img, (5, 70))
+        return cv2.convertScaleAbs(_img, alpha=a, beta=b)
+    elif method=='clahe':
+        clahe = cv2.createCLAHE(clipLimit=1.0, tileGridSize=(8,8))
+        return clahe.apply(_img)
+    else:
+        raise Exception(f'Method {method} unknown. Available methods: auto and clahe.')
 
 
 def get_mean_params(cap_structs: List[CapillaryStruct]) -> dict:
@@ -363,6 +372,8 @@ def get_intersection_point(line_1: np.ndarray, line_2: np.ndarray):
 
     return np.linalg.solve(a, b).astype(int)
 
+def auto_algin(img: np.ndarray):
+    pass
 
 def get_line_params(line: np.ndarray):
     if len(line) == 0:
@@ -376,7 +387,7 @@ def get_line_params(line: np.ndarray):
 
 
 def get_slope(start: Point, end: Point):
-    return (start.y - end.y) / (start.x - end.x)
+    return divide_by_zero(start.y - end.y , start.x - end.x)
 
 
 def get_intercept(slope: float, point: Point):
@@ -389,7 +400,7 @@ def plot_isolated_particle(img_arr: np.ndarray,
 
     points = get_region_of_interest(_img_arr, params)
     _img_arr = isolate_particle(_img_arr, points)
-    _img_arr = apply_contrast(_img_arr)
+    _img_arr = apply_contrast(_img_arr, method='auto')
 
     # _img_arr = cv2.Canny(_img_arr, 20, 300)
     plt.imshow(_img_arr, cmap='gray')
@@ -399,7 +410,8 @@ def plot_isolated_particle(img_arr: np.ndarray,
 def save_and_apply_particle_isolation(img_paths: List[str],
                                       params: dict,
                                       save: bool = False,
-                                      save_dir: Union[str, Path, None] = None):
+                                      save_dir: Union[str, Path, None] = None,
+                                      contrast_method='auto'):
     _imgs = []
 
     if save:
@@ -453,9 +465,9 @@ if __name__ == "__main__":
     imgs = get_image_paths_from_dir(img_path)
 
     # sample_img = img_path / '006.png'
-    t_img_paths = imgs[:6]
+    t_img_paths = imgs[-6:]
     mean_params = preprocess_sequence(t_img_paths)
-    save_and_apply_particle_isolation(t_img_paths, mean_params, save=True)
+    # save_and_apply_particle_isolation(t_img_paths, mean_params, save=True)
 
     # fig, ax = plt.subplots(3, 3, figsize=(8, 6))
     # for idx, img_path in enumerate(img_paths):
@@ -472,6 +484,8 @@ if __name__ == "__main__":
     # plt.clf()
 
     t_img = cv2.imread(str(t_img_paths[2]), cv2.IMREAD_GRAYSCALE)
+    plt.imshow(t_img, cmap='gray')
+    plt.show()
     param = mean_params["arr_1"]
     lb = mean_params["lb"]
     _, w = t_img.shape
