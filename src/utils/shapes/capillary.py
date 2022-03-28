@@ -23,19 +23,20 @@ class GeometryError(Exception):
 class CapillaryImage:
 
     def __init__(self, yx_r: Tuple[int, int] = (200, 50),
-                 theta: Union[int, float] = 2.5,
+                 theta: Union[int, float] = None,
                  taper_dist: Union[int, float] = 30,
                  taper_to_c1_dist: Union[int, float] = 120,
-                 l_b1: int = 20,
-                 l_b2: int = 20,
-                 l_band: int = 35,
+                 l_b1: int = None,
+                 l_b2: int = None,
+                 r_band:int = None,
+                 l_band: int = None,
                  taper_cutoff: int = 120,
                  img_size: Tuple[int, int] = (400, 400),
                  is_deg: bool = True):
         """
 
         :param yx_r: Coordinates of virtual reference point of theta
-        :param theta: Angle in degrees of taper
+        :param theta: Half angle (in degrees) of taper
         :param taper_dist: Distance from virtual point to taper, 0 is when there is no cut
         :param taper_to_c1_dist:
         :param l_b1:
@@ -48,7 +49,7 @@ class CapillaryImage:
         self.bounding_box = None
         self.coords = None
         self.volume = None
-        self.r_band = None
+        self.r_band = r_band
         self.theta = theta
         self.yx_r = yx_r
         self.taper_dist = taper_dist
@@ -77,8 +78,13 @@ class CapillaryImage:
         self.capillary_line_width = 10
 
     def _check_bounds(self):
+        if self.r_band is None:
+            # check for l_b1
+            if (self.l_b1 < self.l_b_min) | (self.l_b2 < self.l_b_min):
+                raise InvalidBoundError(f"L_B1 ({self.l_b1}) or L_B2 ({self.l_b2}) below minimum of {self.l_b_min}")
+
         # check for theta (if deg or rad and convert appropriately)
-        if self.is_deg:
+        if self.is_deg and self.theta is not None:
             self.theta = np.deg2rad(self.theta)
         # check for yx_r coord ranges (bounds)
         if (self.yx_r[0] > self.dim[1]) | \
@@ -91,9 +97,7 @@ class CapillaryImage:
         # check for taper_to_c1_dist (bounds)
         if self.taper_to_c1_dist < self.taper_to_c1_dist_min:
             raise InvalidBoundError(f"Taper C1 dist {self.taper_to_c1_dist} < {self.taper_to_c1_dist_min}")
-        # check for l_b1
-        if (self.l_b1 < self.l_b_min) | (self.l_b2 < self.l_b_min):
-            raise InvalidBoundError(f"L_B1 ({self.l_b1}) or L_B2 ({self.l_b2}) below minimum of {self.l_b_min}")
+
         # check for l_band
         if self.l_band < self.l_band_min:
             raise InvalidBoundError(f"L_band {self.l_band} below minimum of {self.l_band_min}")
@@ -235,7 +239,131 @@ class CapillaryImage:
 
         return coords
 
-    def generate_image(self, img: Image.Image = None, is_annotate: bool = True):
+    def _generate_capillary_v2(
+            self,
+            ) -> Dict:
+        """
+
+        :rtype: Dict
+        """
+
+        l_d, v1_c1, r_1, r_2 = map(int, decompose_l_r_band(self.theta, self.l_band, self.r_band))
+        x_r, y_r = self.yx_r[1], self.dim[1] // 2 # auto centering in the y axis
+        ref_image = np.zeros(self.dim)
+
+        # create our imaginary capillary
+        y_L1, x_L1 = line(y_r, x_r, int(np.tan(self.theta) * (ref_image.shape[0] - x_r)) + y_r, ref_image.shape[0] - 1)
+        y_L2, x_L2 = line(y_r, x_r, y_r - int(np.tan(self.theta) * (ref_image.shape[0] - x_r)), ref_image.shape[0] - 1)
+
+        # b1, b2 are the curvatures that define our particle interfaces
+        # points for b1
+        b1_x1 = x_r + v1_c1  # center of circle (x-coord)
+        b1_y1 = y_L1[x_L1 == b1_x1][0]
+        # b1_x1 = np.divide(r_band, np.tan(theta)) - l_band / 2
+        # b1_radius = int(np.tan(theta) * v1_c1)
+        # b1_y1 = y_r + b1_radius
+        b1_x2 = b1_x1 - r_1  # edge of circle (x-coord)
+        b1_y2 = y_r  # edge of circle (y-coord)
+        b1_x3 = b1_x1
+        b1_y3 = y_L2[x_L2 == b1_x1][0]
+        # b1_x = [b1_x1, b1_x2, b1_x3]
+        # b1_y = [b1_y1, b1_y2, b1_y3]
+        # generate circle coods
+        b1_ry, b1_cx = circle_perimeter(b1_y2, b1_x1, r_1, shape=self.dim)
+        # indices of half circle
+        b1_mask = b1_cx <= b1_x1
+        b1_xf, b1_yf = b1_cx[b1_mask], b1_ry[b1_mask]
+        # b1_xf, b1_yf = sort_xy(b1_xf, b1_xf)
+        # b1_p = get_bezier_parameters(b1_x, b1_y, degree=2)
+        # b1_xf, b1_yf = bezier_curve(b1_p, n_times=50)f
+
+        # points for b2
+        b2_x1 = b1_x1 + self.l_band
+        b2_y1 = y_L1[x_L1 == b2_x1][0]
+        b2_x2 = b2_x1 + r_2
+        b2_y2 = y_r
+        b2_x3 = b2_x1
+        b2_y3 = y_L2[x_L2 == b2_x1][0]
+        # b2_x = [b2_x1, b2_x2, b2_x3]
+        # b2_y = [b2_y1, b2_y2, b2_y3]
+        # generate circle coords
+        b2_ry, b2_cx = circle_perimeter(b2_y2, b2_x1, r_2, shape=self.dim)
+        # indices of half circle
+        b2_mask = b2_cx >= b2_x1
+        b2_xf, b2_yf = b2_cx[b2_mask], b2_ry[b2_mask]
+        # b2_xf, b2_yf = sort_xy(b2_xf, b2_yf)
+        # b2_p = get_bezier_parameters(b2_x, b2_y, degree=2)
+        # b2_xf, b2_yf = bezier_curve(b2_p, n_times=50)
+
+        # some transformations to generate the taper cutoff
+        if (self.taper_cutoff < (self.taper_dist + x_r)) | (self.taper_cutoff > b1_x2):
+            self.taper_cutoff = self.taper_dist + x_r
+
+        ind_f = x_L1 >= self.taper_cutoff
+        y_L1, x_L1 = y_L1[ind_f], x_L1[ind_f]
+        y_L2, x_L2 = y_L2[ind_f], x_L2[ind_f]
+
+        # points for taper cutoff curvature
+        b3_x1 = x_L1[0]
+        b3_y1 = y_L1[0]
+        b3_x2 = b3_x1 - self.capillary_close_depth
+        b3_y2 = y_r
+        b3_x3 = x_L1[0]
+        b3_y3 = y_L2[0]
+        b3_x = [b3_x1, b3_x2, b3_x3]
+        b3_y = [b3_y1, b3_y2, b3_y3]
+        # generate bezier fit
+        # b3_p = get_bezier_parameters(b3_x, b3_y, degree=2)
+        b3_xf, b3_yf = b3_x, b3_y
+
+        # get geometry of deformed particle
+        # need to find intersection of x, y coord with line
+        x_ind_def = (x_L1 >= b1_x1) & (x_L1 <= b2_x1)
+        y_ind_def = (y_L1 <= b1_y1) & (y_L1 >= b2_x1)
+        x_L1_v, y_L1_v = x_L1[x_ind_def], y_L1[x_ind_def]
+        x_L2_v, y_L2_v = x_L2[y_ind_def], y_L2[y_ind_def]
+        b1_intersect = b1_xf <= min(x_L1_v)
+
+        x_v = np.concatenate([b1_xf, x_L1_v, b2_xf, x_L2_v])
+        y_v = np.concatenate([b1_yf, y_L1_v, b2_yf, y_L2_v])
+
+        x_v, y_v = sort_xy(x_v, y_v)
+
+        midpoint_x_polygon = b1_x1 + 0.5 * self.l_band
+        r_band = np.round(np.tan(self.theta) * midpoint_x_polygon, 3)
+        r1 = b1_y2 - b1_y1
+        r2 = b2_y2 - b2_y1
+        volume = round(_calc_vol(r1, r2, b1_x2, b2_x2, self.l_band), 2)
+
+        # For reframed prediction task
+        x0 = (b3_x1, b3_y1)
+        x1 = (b1_x1, b1_y1)
+        x2 = (b2_x1, b2_y1)
+        x3 = (b1_x3, b1_y3)
+        x4 = (b2_x3, b2_y3)
+        x5 = (b1_x2, b1_y2)
+        x6 = (b2_x2, b2_y2)
+
+        # for bounding box
+        x_min, y_min = b1_x2, b2_y1
+        x_max, y_max = b2_x2, b2_y3
+
+        coords = {
+            "L1": (x_L1, y_L1),
+            "L2": (x_L2, y_L2),
+            "B1": (b1_xf, b1_yf),
+            "B2": (b2_xf, b2_yf),
+            "EL": (x_v, y_v),
+            "B3": (b3_xf, b3_yf),
+            "T1": np.array([x0, x1, x2, x3, x4, x5, x6]).flatten(),
+            "T2": np.array([x_min, y_min, x_max, y_max]).flatten(),
+            "data":
+                dict(r_band=self.r_band, l_band=self.l_band, volume=volume)
+        }
+
+        return coords
+
+    def generate_image(self, img: Image.Image = None, is_annotate: bool = True, version:int=2):
         """
         Generate image onto supplied axes
         :param img: PIL image object
@@ -244,16 +372,19 @@ class CapillaryImage:
         """
         assert img is not None
 
-        coords = self._generate_capillary(self.yx_r,
-                                          self.theta,
-                                          self.taper_dist,
-                                          self.taper_to_c1_dist,
-                                          self.l_b1,
-                                          self.l_b2,
-                                          self.l_band,
-                                          self.taper_cutoff,
-                                          self.capillary_close_depth,
-                                          self.dim)
+        if version == 2:
+            coords = self._generate_capillary_v2()
+        else:
+            coords = self._generate_capillary(self.yx_r,
+                                              self.theta,
+                                              self.taper_dist,
+                                              self.taper_to_c1_dist,
+                                              self.l_b1,
+                                              self.l_b2,
+                                              self.l_band,
+                                              self.taper_cutoff,
+                                              self.capillary_close_depth,
+                                              self.dim)
 
         coords_L1 = coords["L1"]
         coords_L2 = coords["L2"]
@@ -393,6 +524,18 @@ class CapillaryImageGenerator(ImageGenerator):
         res_fp = str(save_dir / 'targets')
         np.savez(res_fp, T0=res_T0, T1=res_T1, T2=res_T2, allow_pickle=False)
 
+def get_theta(l_band:float, r_band:float)->float:
+    """
+    Get theta from a specified l_band and r_band
+
+    :param l_band: float
+    :param r_band: float
+    :return: theta as a float.
+    """
+    return np.arctan2(l_band / 2, r_band)
+
+def create_image(radius:float, length:float):
+    pass
 
 def _calc_vol(r1, r2, b1, b2, l_band):
     # split volume into 3 components
@@ -420,17 +563,34 @@ def sort_xy(x: np.ndarray, y: np.ndarray):
 
     mask = np.argsort(angles)
 
-    x_sorted = x[mask]
-    y_sorted = y[mask]
+    return x[mask], y[mask]
 
-    return x_sorted, y_sorted
 
+def decompose_l_r_band(theta, l_band, r_band)->tuple:
+    """
+    Internal function to decompose the l and r band to get r_a and r_b, l_d and L and l_a
+    respectively
+
+    :return: Tuple of (v1_c1, r_a, r_b)
+    """
+    if r_band is None:
+        raise GeometryError('No r_band specified')
+    # if self.theta is None: # in subsequent images, we find that theta is fixed.
+    #     self.theta = get_theta(l_band=self.l_band, r_band=self.r_band)
+    l_d = r_band / np.tan(theta)
+
+    v1_c1 =l_d - l_band / 2 # dist from reference to r_1
+    r_a = v1_c1 * (r_band / l_d)
+    r_b = (v1_c1 + l_band) * (r_band / l_d)
+
+    return l_d, v1_c1, r_a, r_b
 
 if __name__ == "__main__":
-    # single_cap = CapillaryImage()
-    # fig, ax = plt.subplots()
-    # single_cap.generate_image(ax)
-    # plt.show()
-    cap = CapillaryImageGenerator(save_dir=None, num_images=1000, force_images=True, target_size=(400, 400))
-    cap.generate()
+    single_cap = CapillaryImage(theta=3.12 * 2, l_band=70, r_band=25)
+    temp_image = Image.new(mode='L', size=single_cap.dim, color=255)
+    single_cap.generate_image(temp_image)
+    plt.imshow(temp_image,  cmap='gray', aspect='auto')
+    plt.show()
+    # cap = CapillaryImageGenerator(save_dir=None, num_images=1000, force_images=True, target_size=(400, 400))
+    # cap.generate()
     # a = apply_keypoints_scale(((200.0,200.0) ,(200.0, 200.0)), (400, 400), (1200, 1200))
