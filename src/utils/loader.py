@@ -178,13 +178,7 @@ class KeyPointDataLoader(BaseDataLoader):
 
         y = np.zeros((self.batch_size, self.num_targets))
         for i, target in enumerate(target_paths):
-            with open(target) as _f:
-                _y = json.load(_f)
-            keypoints = []
-            points = [f"p{p}" for p in range(self.num_targets // 2)]
-            for kp in points:
-                keypoints.append(_y["keypoints"][kp]["x"])
-                keypoints.append(_y["keypoints"][kp]["y"])
+            keypoints = get_keypoints_from_json(str(target), self.num_targets)
             if self.scale_img is not None:
                 y[i] = [_ty / self.scale_img for _ty in keypoints]
             else:
@@ -240,6 +234,18 @@ def prepare_img_prediction(img_arr: np.ndarray):
     return np.reshape(sample_img, (1,) + sample_img.shape).astype('float32')
 
 
+def get_keypoints_from_json(json_path: str, num_targets):
+    with open(json_path) as _f:
+        _y = json.load(_f)
+    keypoints = []
+    points = [f"p{p}" for p in range(num_targets // 2)]
+    for kp in points:
+        keypoints.append(_y["keypoints"][kp]["x"])
+        keypoints.append(_y["keypoints"][kp]["y"])
+
+    return keypoints
+
+
 def _get_images_from_dir(image_dir: Union[str, Path], sort=True) -> List[Tuple[str, str, str]]:
     if isinstance(image_dir, str):
         image_dir = Path(image_dir)
@@ -291,8 +297,10 @@ def get_target_data_from_idx(data: np.ndarray, img_idx: int, include_idx=False,
         return f_data[fields].item()
 
 
-def get_img_target_data(img_path: Union[str, Path], data_path: Union[str, Path],
-                        img_size: Union[Tuple[int, int], None] = None, task: str = "T1", include_idx=False) -> \
+def get_img_target_data(img_path: Union[str, Path],
+                        data_path: Union[str, Path],
+                        img_size: Union[Tuple[int, int], None] = None,
+                        task: str = "T1", include_idx=False) -> \
         Tuple[np.ndarray, dict]:
     """
     Returns a tuple containing the Image as a PIL instance and a dictionary
@@ -310,24 +318,27 @@ def get_img_target_data(img_path: Union[str, Path], data_path: Union[str, Path],
     img = cv2.imread(img_path, cv2.IMREAD_GRAYSCALE)
     if img_size is not None:  # should be given
         img = cv2.resize(img, img_size, interpolation=cv2.INTER_AREA)
-    img_idx = get_idx_from_img_path(img_path)  # should be given
 
     data_path_ext = os.path.splitext(data_path)[-1]
 
     if data_path_ext == ".npz":
+        img_idx = get_idx_from_img_path(img_path)  # should be given
         src_data = np.load(data_path)[task]
+        start_idx = 0 if include_idx else 1
+        field_names = src_data.dtype.names[start_idx:]
+        img_props = get_target_data_from_idx(src_data, img_idx, include_idx=include_idx)
+        return img, dict(zip(field_names, img_props))
+
+    elif data_path_ext == ".json":
+        return img, {(f"x{idx // 2}" if idx % 2 == 0 else f"y{idx // 2}"): v for idx, v in
+                     enumerate(get_keypoints_from_json(data_path, 14))}
+
     else:
-        src_data = np.load(data_path)
-
-    start_idx = 0 if include_idx else 1
-    field_names = src_data.dtype.names[start_idx:]
-    img_props = get_target_data_from_idx(src_data, img_idx, include_idx=include_idx)
-
-    return img, dict(zip(field_names, img_props))
+        raise Exception(f"Invalid extension of data path {data_path_ext}")
 
 
 def match_image_to_target(images_path: str, targets_path: str,
-                          target_fmt:List[str]=ACCEPTABLE_IMAGE_FORMATS,
+                          target_fmt: List[str] = ACCEPTABLE_IMAGE_FORMATS,
                           ignore_non_match: bool = True) -> Tuple[List, List]:
     """
     Find all the images from the images_path directory and

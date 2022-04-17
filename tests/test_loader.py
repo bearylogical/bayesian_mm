@@ -1,7 +1,43 @@
-from src.utils.loader import KeyPointDataLoader, match_image_to_target, BaseDataLoader
+
+import numpy as np
+
+from src.utils.loader import KeyPointDataLoader, \
+    match_image_to_target, \
+    BaseDataLoader, \
+    get_idx_from_img_path,\
+    get_keypoints_from_json,\
+    get_img_target_data
 
 
 class TestFileOperations:
+
+    def test_get_img_id_from_path(self):
+        assert get_idx_from_img_path("sample.py") == "sample"
+        assert get_idx_from_img_path("1.jpg") == "1"
+
+    def test_get_keypoints_from_json(self, mock_img_keypoint_label):
+        mock_img_dir, mock_label_dir = mock_img_keypoint_label
+        mock_imgs, mock_labels = match_image_to_target(str(mock_img_dir),
+                                                       str(mock_label_dir),
+                                                       target_fmt=[".json"])
+
+        res = get_keypoints_from_json(str(mock_labels[0]), 14)
+        assert len(res) == 14
+        assert res == [1., 41., 2. , 42., 3., 43., 4., 44., 5., 45., 6., 46. , 7., 47.]
+
+    def test_get_image_data_json(self, mock_img_keypoint_label):
+        mock_img_dir, mock_label_dir = mock_img_keypoint_label
+        mock_imgs, mock_labels = match_image_to_target(str(mock_img_dir),
+                                                       str(mock_label_dir),
+                                                       target_fmt=[".json"])
+        res = get_img_target_data(mock_imgs[0], mock_labels[0])
+        assert isinstance(res[0], np.ndarray)
+        assert res[0].shape == (600, 600)
+        assert len(res[1]) == 14
+        assert res[1]["x0"] == 1.
+        assert res[1]["y3"] == 44.
+        assert res[1]["x4"] == 5.
+
     def test_input_target_match(self, mock_img_keypoint_label):
         mock_img_dir, mock_label_dir = mock_img_keypoint_label
         mock_imgs, mock_labels = match_image_to_target(str(mock_img_dir),
