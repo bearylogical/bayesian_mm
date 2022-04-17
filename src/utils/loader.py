@@ -182,15 +182,6 @@ class KeyPointDataLoader(BaseDataLoader):
         for idx, d in enumerate(self.target_data):
             self.targets[idx] = get_keypoints_from_json(d, self.num_targets)
 
-    def _get_target_data(self, target_paths: List[dict]):
-
-        y = np.zeros((self.batch_size, self.num_targets))
-        for i, target in enumerate(target_paths):
-            keypoints = get_keypoints_from_json(target, self.num_targets)
-            y[i] = keypoints
-
-        return y
-
     def __getitem__(self, idx):
         """Returns tuple (input, target) correspond to batch #idx."""
         i = idx * self.batch_size
@@ -247,7 +238,7 @@ def get_keypoints_from_json(json_dict: dict, num_targets):
             kp_x = json_dict["keypoints"][kp]["x"]
             kp_y = json_dict["keypoints"][kp]["y"]
         except KeyError:
-            pass
+            print(json_dict["file_name"])
         finally:
             keypoints.append(kp_x)
             keypoints.append(kp_y)
@@ -304,6 +295,15 @@ def get_target_data_from_idx(data: np.ndarray, img_idx: int, include_idx=False,
     else:
         return f_data[fields].item()
 
+def get_keypoint_from_ls(img_shape: tuple, kp_list: list):
+    h_factor, w_factor = (v / 100 for v in img_shape)
+    kps = {}
+    for idx, v in enumerate(kp_list):
+        if idx % 2 == 0:
+            kps[f"x{idx // 2}"] = v * w_factor
+        else:
+            kps[f"y{idx // 2}"] = v * h_factor
+    return kps
 
 def get_img_target_data(img_path: Union[str, Path],
                         data_path: Union[str, Path],
@@ -338,14 +338,8 @@ def get_img_target_data(img_path: Union[str, Path],
         return img, dict(zip(field_names, img_props))
 
     elif data_path_ext == ".json":
-        h_factor, w_factor = (v/100 for v in img.shape)
-        kps = {}
-        for idx, v in enumerate(get_keypoints_from_json(json.load(open(data_path)), 14)):
-            if idx % 2 == 0:
-                kps[f"x{idx // 2}"] = v * w_factor
-            else:
-                kps[f"y{idx // 2}"] = v * h_factor
-        return img, kps
+        kps_list = get_keypoints_from_json(json.load(open(data_path)), 14)
+        return img, get_keypoint_from_ls(img.shape, kps_list)
 
     else:
         raise Exception(f"Invalid extension of data path {data_path_ext}")
@@ -386,3 +380,6 @@ if __name__ == "__main__":
     labels_dir = "dataset/experiments/15Apr/labels"
     # match data and labels
     imgs, labels = match_image_to_target(img_dir, labels_dir, target_fmt=[".json"])
+    kp = []
+    for l in labels:
+        kp.append(get_keypoints_from_json(json.load(open(l)), num_targets=14))
