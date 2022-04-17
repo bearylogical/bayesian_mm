@@ -9,7 +9,8 @@ from PIL import Image
 import cv2
 import albumentations as A
 import numpy as np
-from src.utils.loader import get_image_paths_from_dir, RegressionDataLoaderT1, get_img_target_data, prepare_img_prediction
+from src.utils.loader import get_image_paths_from_dir, RegressionDataLoaderT1, get_img_target_data, \
+    prepare_img_prediction, match_image_to_target
 from PIL import Image
 from typing import Union, List, Tuple
 import copy
@@ -141,15 +142,15 @@ def display_img_coords(img: np.ndarray,
     if true_coords is None and pred_coords is None:
         raise Exception('No coords supplied!')
 
-    fig = plt.figure(figsize=get_figsize(*img.shape))
+    fig = plt.figure()
     ax = fig.add_axes([0, 0, 1, 1])
-    ax.imshow(img, origin='lower', cmap='gray', aspect='auto')
+    ax.imshow(img, cmap='gray', aspect='auto')
 
-    true_coords = true_coords.reshape(7, 2)
+    true_coords = true_coords.reshape(-1, 2)
     _plot_keypoints(ax, true_coords, marker_size, 'Ground Truth')
 
     if pred_coords is not None:
-        pred_coords = pred_coords.reshape(7, 2)
+        pred_coords = pred_coords.reshape(-1, 2)
         _plot_keypoints(ax, pred_coords, marker_size, 'Predicted', marker_fmt='cx')
 
     plt.legend()
@@ -228,35 +229,12 @@ def display_predictions(model: Model,
     plt.show()
 
 if __name__ == "__main__":
-    # from pathlib import Path
-    #
-    img_path = Path('dataset/20220302/images/train')
-    data_path = img_path / 'targets.npz'
-    sample_img = img_path / '006.png'
-    #
-    from src.utils.loader import get_img_target_data
-    #
-    t_img, data = get_img_target_data(sample_img, data_path, task="T1")
-    # _, bb_data = get_img_target_data(sample_img, data_path, task="T2")
-    t_coords = np.array([v for v in data.values()])
-    # bb_data = np.array([v for v in bb_data.values()])
-    # display_composite(t_img, bb_box_coords=bb_data, coords=t_coords)
-    import numpy as np
-    pred_coords = np.random.randint(-5, 5, size=t_coords.size) + t_coords
-    display_img_coords(t_img, t_coords, None)
-    # #
-    img_dir = 'dataset/20220302/images/train'
-    img_paths = get_image_paths_from_dir(img_dir)
-    target_path = 'dataset/20220302/images/train/targets.npz'
+    img_dir = "dataset/experiments/15Apr"
+    labels_dir = "dataset/experiments/15Apr/labels"
+    # match data and labels
+    imgs, labels = match_image_to_target(img_dir, labels_dir, target_fmt=[".json"])
+    t_img, data = get_img_target_data(imgs[0], labels[0])
 
-    train_gen = RegressionDataLoaderT1(input_img_paths=img_paths,
-                                       task='T1',
-                                       batch_size=2,
-                                       img_size=(128,128), target_paths=target_path,
-                                       normalize=True)
-    display_augmentations(train_gen)
-    # from train import load_model
-    # sample_model = load_model("dataset/sample/3x3and5x5Filter_20220301_1259")
-    #
-    # img_dir = 'dataset/20220301/images/train'
-    # display_predictions(sample_model, img_dir)
+
+    t_coords = np.array([v for v in data.values()])
+    display_img_coords(t_img, t_coords)

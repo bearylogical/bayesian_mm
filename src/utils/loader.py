@@ -179,10 +179,8 @@ class KeyPointDataLoader(BaseDataLoader):
         y = np.zeros((self.batch_size, self.num_targets))
         for i, target in enumerate(target_paths):
             keypoints = get_keypoints_from_json(str(target), self.num_targets)
-            if self.scale_img is not None:
-                y[i] = [_ty / self.scale_img for _ty in keypoints]
-            else:
-                y[i] = keypoints
+
+            y[i] = keypoints
 
         return y
 
@@ -200,9 +198,9 @@ class KeyPointDataLoader(BaseDataLoader):
                 _transformed = self.transform(image=_xi, keypoints=_yi.reshape(7, 2))
                 x[idx] = _transformed['image']
                 y[idx] = np.array(_transformed['keypoints']).flatten()
-
-        if self.normalize:
-            y = normalize_keypoints(y, batch_input_img_labels)
+        #
+        # if self.normalize:
+        #     y = normalize_keypoints(y, batch_input_img_labels)
 
         return x, y
 
@@ -234,17 +232,22 @@ def prepare_img_prediction(img_arr: np.ndarray):
     return np.reshape(sample_img, (1,) + sample_img.shape).astype('float32')
 
 
-def get_keypoints_from_json(json_path: str, num_targets):
+def get_keypoints_from_json(json_path: str, num_targets, normalize:bool=True):
     with open(json_path) as _f:
         _y = json.load(_f)
     keypoints = []
     points = [f"p{p}" for p in range(num_targets // 2)]
-    for kp in points:
-        keypoints.append(_y["keypoints"][kp]["x"])
-        keypoints.append(_y["keypoints"][kp]["y"])
 
+    for kp in points:
+        if normalize:
+            keypoints.append(_y["keypoints"][kp]["x"])
+            keypoints.append(_y["keypoints"][kp]["y"])
     return keypoints
 
+def keypoint_from_ls(orginal_shape:tuple, keypoints:dict):
+    w, h = orginal_shape
+    keypoints.append(w * _y["keypoints"][kp]["x"] / 100)
+    keypoints.append(h * _y["keypoints"][kp]["y"] / 100)
 
 def _get_images_from_dir(image_dir: Union[str, Path], sort=True) -> List[Tuple[str, str, str]]:
     if isinstance(image_dir, str):
@@ -266,13 +269,13 @@ def get_image_paths_from_dir(image_dir: Union[str, Path]) -> List[Path]:
     return get_format_files(image_dir)
 
 
-def get_idx_from_img_path(img_path: str) -> int:
+def get_idx_from_img_path(img_path: str) -> str:
     """
     Returns image ID from img_path
     :param img_path:
     :return:
     """
-    return int(os.path.split(img_path)[1].split('.')[0])
+    return os.path.split(img_path)[1].split('.')[0]
 
 
 def get_target_data_from_idx(data: np.ndarray, img_idx: int, include_idx=False,
@@ -322,7 +325,7 @@ def get_img_target_data(img_path: Union[str, Path],
     data_path_ext = os.path.splitext(data_path)[-1]
 
     if data_path_ext == ".npz":
-        img_idx = get_idx_from_img_path(img_path)  # should be given
+        img_idx = int(get_idx_from_img_path(img_path) ) # should be given
         src_data = np.load(data_path)[task]
         start_idx = 0 if include_idx else 1
         field_names = src_data.dtype.names[start_idx:]
@@ -330,8 +333,14 @@ def get_img_target_data(img_path: Union[str, Path],
         return img, dict(zip(field_names, img_props))
 
     elif data_path_ext == ".json":
-        return img, {(f"x{idx // 2}" if idx % 2 == 0 else f"y{idx // 2}"): v for idx, v in
-                     enumerate(get_keypoints_from_json(data_path, 14))}
+        h_factor, w_factor = (v/100 for v in img.shape)
+        kps = {}
+        for idx, v in enumerate(get_keypoints_from_json(data_path, 14)):
+            if idx % 2 == 0:
+                kps[f"x{idx // 2}"] = v * w_factor
+            else:
+                kps[f"y{idx // 2}"] = v * h_factor
+        return img, kps
 
     else:
         raise Exception(f"Invalid extension of data path {data_path_ext}")
@@ -368,7 +377,7 @@ def match_image_to_target(images_path: str, targets_path: str,
 
 
 if __name__ == "__main__":
-    generation_date = "20220303"
-    demo_img_path = get_image_paths_from_dir(f"dataset/{generation_date}/images")[0]
-    t_data_path = f"dataset/{generation_date}/images/targets.npy"
-    target_info = get_img_target_data(demo_img_path, t_data_path)
+    img_dir = "dataset/experiments/15Apr"
+    labels_dir = "dataset/experiments/15Apr/labels"
+    # match data and labels
+    imgs, labels = match_image_to_target(img_dir, labels_dir, target_fmt=[".json"])

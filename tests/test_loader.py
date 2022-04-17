@@ -34,9 +34,9 @@ class TestFileOperations:
         assert isinstance(res[0], np.ndarray)
         assert res[0].shape == (600, 600)
         assert len(res[1]) == 14
-        assert res[1]["x0"] == 1.
-        assert res[1]["y3"] == 44.
-        assert res[1]["x4"] == 5.
+        assert res[1]["x0"] == 6.
+        assert res[1]["y3"] == 264.
+        assert res[1]["x4"] == 30.
 
     def test_input_target_match(self, mock_img_keypoint_label):
         mock_img_dir, mock_label_dir = mock_img_keypoint_label
