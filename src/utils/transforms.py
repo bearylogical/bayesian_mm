@@ -1,6 +1,6 @@
 from pathlib import Path
 import json
-from typing import List
+from typing import List, Tuple
 import numpy as np
 from PIL import Image
 
@@ -48,7 +48,7 @@ def normalise_bands(bands, img_size):
     return np.array([r_band / img_size[1], l_band / img_size[0]])
 
 
-def downscale_img(fp: Path, target_size: tuple[int, int] = (300, 300)) -> Image.Image:
+def downscale_img(fp: Path, target_size: Tuple[int, int] = (300, 300)) -> Image.Image:
     img = Image.open(str(fp))
     img.thumbnail(target_size)
 
