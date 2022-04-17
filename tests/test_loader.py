@@ -1,3 +1,4 @@
+import json
 
 import numpy as np
 
@@ -20,8 +21,8 @@ class TestFileOperations:
         mock_imgs, mock_labels = match_image_to_target(str(mock_img_dir),
                                                        str(mock_label_dir),
                                                        target_fmt=[".json"])
-
-        res = get_keypoints_from_json(str(mock_labels[0]), 14)
+        mock_labels = [json.load(open(f)) for f in mock_labels]
+        res = get_keypoints_from_json(mock_labels[0], 14)
         assert len(res) == 14
         assert res == [1., 41., 2. , 42., 3., 43., 4., 44., 5., 45., 6., 46. , 7., 47.]
 
@@ -51,7 +52,7 @@ class TestBaseDataLoader:
         mock_imgs, mock_labels = match_image_to_target(str(mock_img_dir),
                                                        str(mock_label_dir),
                                                        target_fmt=[".json"])
-        mock_data_loader = KeyPointDataLoader(batch_size=5,
+        mock_data_loader = BaseDataLoader(batch_size=5,
                                               img_size=(128, 128),
                                               transform=None,
                                               input_img_paths=mock_imgs,

@@ -1,7 +1,7 @@
 import pytest
 import json
 from pathlib import Path
-from typing import Tuple
+from typing import Tuple, List
 from PIL import Image
 import uuid
 # from src.utils.shapes.circles import CirclesGenerator
@@ -57,17 +57,16 @@ def mock_img_keypoint_label(tmpdir_factory) -> Tuple[Path, Path]:
     mock_label_dir = mock_img_dir.mkdir('labels')
     mock_images = 10
     mock_keypoint_data = {
-            "file_name": "some_file.png",
             "original_width": 600,
             "original_height": 600,
             "keypoints": {
-                "p0": dict(x=1.3333333333333335, y=41.375586854460096, width=0.3418803418803419),
-                "p1": dict(x=2.3333333333333335, y=42.375586854460096, width=0.3418803418803419),
-                "p2": dict(x=3.3333333333333335, y=43.375586854460096, width=0.3418803418803419),
-                "p3": dict(x=4.3333333333333335, y=44.375586854460096, width=0.3418803418803419),
-                "p4": dict(x=5.3333333333333335, y=45.375586854460096, width=0.3418803418803419),
-                "p5": dict(x=6.3333333333333335, y=46.375586854460096, width=0.3418803418803419),
-                "p6": dict(x=7.3333333333333335, y=47.375586854460096, width=0.3418803418803419)
+                "p0": dict(x=1., y=41., width=0.),
+                "p1": dict(x=2., y=42., width=0.),
+                "p2": dict(x=3., y=43., width=0.),
+                "p3": dict(x=4., y=44., width=0.),
+                "p4": dict(x=5., y=45., width=0.),
+                "p5": dict(x=6., y=46., width=0.),
+                "p6": dict(x=7., y=47., width=0.)
             }}
 
     for _ in range(mock_images):

@@ -30,7 +30,7 @@ class BaseDataLoader(Sequence):
                  batch_size: int,
                  img_size: Tuple[int, int],
                  input_img_paths: List[Union[Path, str]],
-                 target_paths: Union[List[Union[Path, str]], Union[Path, str]],
+                 target_paths: Union[List[Union[Path, str, dict]], Union[Path, str]],
                  is_rgb: bool = False,
                  transform=None):
         """
@@ -174,12 +174,19 @@ class KeyPointDataLoader(BaseDataLoader):
         self.normalize = normalize
         self.transform = transform
 
-    def _get_target_data(self, target_paths: List[Path]):
+        self._transform_target_data()
+
+    def _transform_target_data(self):
+        self.target_data = [json.load(open(f)) for f in self.target_data_path]
+        self.targets = np.zeros((len(self.target_data), self.num_targets))
+        for idx, d in enumerate(self.target_data):
+            self.targets[idx] = get_keypoints_from_json(d, self.num_targets)
+
+    def _get_target_data(self, target_paths: List[dict]):
 
         y = np.zeros((self.batch_size, self.num_targets))
         for i, target in enumerate(target_paths):
-            keypoints = get_keypoints_from_json(str(target), self.num_targets)
-
+            keypoints = get_keypoints_from_json(target, self.num_targets)
             y[i] = keypoints
 
         return y
@@ -188,10 +195,9 @@ class KeyPointDataLoader(BaseDataLoader):
         """Returns tuple (input, target) correspond to batch #idx."""
         i = idx * self.batch_size
         batch_input_img_paths = self.input_img_paths[i: i + self.batch_size]
-        batch_input_img_labels = self.target_data_path[i: i + self.batch_size]
 
         x = self._get_input_image_data(batch_input_img_paths)
-        y = self._get_target_data(batch_input_img_labels)
+        y = self.targets[i: i + self.batch_size]
 
         if self.transform is not None:
             for idx, (_xi, _yi) in enumerate(zip(x, y)):
@@ -232,15 +238,19 @@ def prepare_img_prediction(img_arr: np.ndarray):
     return np.reshape(sample_img, (1,) + sample_img.shape).astype('float32')
 
 
-def get_keypoints_from_json(json_path: str, num_targets, normalize:bool=True):
-    with open(json_path) as _f:
-        _y = json.load(_f)
+def get_keypoints_from_json(json_dict: dict, num_targets):
     keypoints = []
     points = [f"p{p}" for p in range(num_targets // 2)]
-
     for kp in points:
-        keypoints.append(_y["keypoints"][kp]["x"])
-        keypoints.append(_y["keypoints"][kp]["y"])
+        kp_x, kp_y = None, None
+        try:
+            kp_x = json_dict["keypoints"][kp]["x"]
+            kp_y = json_dict["keypoints"][kp]["y"]
+        except KeyError:
+            pass
+        finally:
+            keypoints.append(kp_x)
+            keypoints.append(kp_y)
     return keypoints
 
 
@@ -330,7 +340,7 @@ def get_img_target_data(img_path: Union[str, Path],
     elif data_path_ext == ".json":
         h_factor, w_factor = (v/100 for v in img.shape)
         kps = {}
-        for idx, v in enumerate(get_keypoints_from_json(data_path, 14)):
+        for idx, v in enumerate(get_keypoints_from_json(json.load(open(data_path)), 14)):
             if idx % 2 == 0:
                 kps[f"x{idx // 2}"] = v * w_factor
             else:
