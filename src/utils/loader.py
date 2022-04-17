@@ -239,15 +239,10 @@ def get_keypoints_from_json(json_path: str, num_targets, normalize:bool=True):
     points = [f"p{p}" for p in range(num_targets // 2)]
 
     for kp in points:
-        if normalize:
-            keypoints.append(_y["keypoints"][kp]["x"])
-            keypoints.append(_y["keypoints"][kp]["y"])
+        keypoints.append(_y["keypoints"][kp]["x"])
+        keypoints.append(_y["keypoints"][kp]["y"])
     return keypoints
 
-def keypoint_from_ls(orginal_shape:tuple, keypoints:dict):
-    w, h = orginal_shape
-    keypoints.append(w * _y["keypoints"][kp]["x"] / 100)
-    keypoints.append(h * _y["keypoints"][kp]["y"] / 100)
 
 def _get_images_from_dir(image_dir: Union[str, Path], sort=True) -> List[Tuple[str, str, str]]:
     if isinstance(image_dir, str):
