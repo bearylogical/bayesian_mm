@@ -7,9 +7,11 @@ import numpy as np
 from tensorflow.keras.preprocessing.image import load_img
 from typing import List, Tuple, Union
 from pathlib import Path
+import json
 import albumentations as A
 import cv2
-from src.utils.transforms import normalize
+from src.utils.transforms import normalize, normalize_keypoints
+from src.utils.utilities import get_format_files
 
 VALID_TASKS = ["T0", "T1"]
 
@@ -56,8 +58,8 @@ class BaseDataLoader(Sequence):
     def _get_input_image_data(self, batch_input_img_paths):
         x = np.zeros((self.batch_size,) + self.img_size + (self.channels,), dtype="float32")
         for j, path in enumerate(batch_input_img_paths):
-            # img = load_img(path, color_mode=self.color_mode, target_size=self.img_size)
-            # img = img_to_array(img)
+            if isinstance(path, Path):
+                path = str(path)
             img = cv2.imread(path, cv2.IMREAD_GRAYSCALE)
             if self.scale_img is None:
                 self.scale_img = img.shape[0] / self.img_size[0]
@@ -158,6 +160,59 @@ class RegressionDataLoaderT1(BaseRegressionDataLoader):
         return x, y
 
 
+class KeyPointDataLoader(BaseDataLoader):
+    def __init__(self, batch_size,
+                 img_size,
+                 input_img_paths,
+                 target_paths,
+                 num_targets=14,
+                 normalize: bool = True,
+                 transform: Union[A.Compose, None] = default_aug()):
+        super().__init__(batch_size, img_size, input_img_paths, target_paths)
+        self.target_data_path = target_paths
+        self.num_targets = num_targets
+        self.normalize = normalize
+        self.transform = transform
+
+    def _get_target_data(self, target_paths: List[Path]):
+
+        y = np.zeros((self.batch_size, self.num_targets))
+        for i, target in enumerate(target_paths):
+            with open(target) as _f:
+                _y = json.load(_f)
+            keypoints = []
+            points = [f"p{p}" for p in range(self.num_targets // 2)]
+            for kp in points:
+                keypoints.append(_y["keypoints"][kp]["x"])
+                keypoints.append(_y["keypoints"][kp]["y"])
+            if self.scale_img is not None:
+                y[i] = [_ty / self.scale_img for _ty in keypoints]
+            else:
+                y[i] = keypoints
+
+        return y
+
+    def __getitem__(self, idx):
+        """Returns tuple (input, target) correspond to batch #idx."""
+        i = idx * self.batch_size
+        batch_input_img_paths = self.input_img_paths[i: i + self.batch_size]
+        batch_input_img_labels = self.target_data_path[i: i + self.batch_size]
+
+        x = self._get_input_image_data(batch_input_img_paths)
+        y = self._get_target_data(batch_input_img_labels)
+
+        if self.transform is not None:
+            for idx, (_xi, _yi) in enumerate(zip(x, y)):
+                _transformed = self.transform(image=_xi, keypoints=_yi.reshape(7, 2))
+                x[idx] = _transformed['image']
+                y[idx] = np.array(_transformed['keypoints']).flatten()
+
+        if self.normalize:
+            y = normalize_keypoints(y, batch_input_img_labels)
+
+        return x, y
+
+
 class SegmentDataLoader(BaseDataLoader):
     def __init__(self, batch_size, img_size, input_img_paths, target_paths):
         super().__init__(batch_size, img_size, input_img_paths, target_paths)
@@ -186,30 +241,23 @@ def prepare_img_prediction(img_arr: np.ndarray):
 
 
 def _get_images_from_dir(image_dir: Union[str, Path], sort=True) -> List[Tuple[str, str, str]]:
-    image_list = []
+    if isinstance(image_dir, str):
+        image_dir = Path(image_dir)
 
-    for dir_entry in os.listdir(image_dir):
-        file_name, file_extension = os.path.splitext(dir_entry)
-        if os.path.isfile(os.path.join(image_dir, dir_entry)) and \
-                file_extension in ACCEPTABLE_IMAGE_FORMATS:
-            image_list.append((file_name, file_extension,
-                               os.path.join(image_dir, dir_entry)))
-
+    image_list = get_format_files(image_dir)
     if sort:
         return sorted(image_list, key=lambda x: x[0])  # sort by the file nam
     else:
         return image_list
 
 
-def get_image_paths_from_dir(image_dir: Union[str, Path]) -> List:
+def get_image_paths_from_dir(image_dir: Union[str, Path]) -> List[Path]:
     """
     Returns a list of image path in the proposed image directory with an */images/ parent dir
     :param image_dir:
     :return:
     """
-    img_list = _get_images_from_dir(image_dir)
-
-    return [img[2] for img in img_list]
+    return get_format_files(image_dir)
 
 
 def get_idx_from_img_path(img_path: str) -> int:
@@ -260,7 +308,7 @@ def get_img_target_data(img_path: Union[str, Path], data_path: Union[str, Path],
     if isinstance(img_path, Path):
         img_path = str(img_path)
     img = cv2.imread(img_path, cv2.IMREAD_GRAYSCALE)
-    if img_size is not None:# should be given
+    if img_size is not None:  # should be given
         img = cv2.resize(img, img_size, interpolation=cv2.INTER_AREA)
     img_idx = get_idx_from_img_path(img_path)  # should be given
 
@@ -278,32 +326,9 @@ def get_img_target_data(img_path: Union[str, Path], data_path: Union[str, Path],
     return img, dict(zip(field_names, img_props))
 
 
-def _get_img_seg_path(src_dir: str, img_dir_name: str = "images", segment_dir_name: str = "segment"):
-    """
-    Gets the directory of the image and segments
-
-    :param src_dir:
-    :param img_dir_name:
-    :param segment_dir_name:
-    :return:
-    """
-    im_path = ""
-    segment_path = ""
-
-    for dir_entry in os.listdir(src_dir):
-        dpath = os.path.join(src_dir, dir_entry)
-        if os.path.isdir(dpath):
-            if dir_entry == img_dir_name:
-                im_path = dpath
-            elif dir_entry == segment_dir_name:
-                segment_path = dpath
-            else:
-                raise FileNotFoundError
-
-    return im_path, segment_path
-
-
-def get_pairs_from_paths(images_path: str, segs_path: str, ignore_non_match: bool = True) -> Tuple[List, List]:
+def match_image_to_target(images_path: str, targets_path: str,
+                          target_fmt:List[str]=ACCEPTABLE_IMAGE_FORMATS,
+                          ignore_non_match: bool = True) -> Tuple[List, List]:
     """
     Find all the images from the images_path directory and
     the segmentation images from the segs_path directory
@@ -315,26 +340,24 @@ def get_pairs_from_paths(images_path: str, segs_path: str, ignore_non_match: boo
     :return:
     """
 
-    image_files = []
-    seg_files = []
+    image_files = get_format_files(images_path, sort=True)
+    targets_path = get_format_files(targets_path, file_formats=target_fmt, sort=True)
 
-    image_files = _get_images_from_dir(images_path)
-    seg_files = _get_images_from_dir(segs_path)
+    if len(image_files) != len(targets_path):
+        raise DataLoaderError(f"Invalid number of image files ({len(image_files)}) vs segment files ({targets_path})")
 
-    if len(image_files) != len(seg_files):
-        raise DataLoaderError(f"Invalid number of image files ({len(image_files)}) vs segment files ({seg_files})")
+    img_list, targets_list = [], []
 
-    img_list, seg_list = [], []
-    for _img, _seg in zip(image_files, seg_files):
-        if _img[0] == _seg[0]:
-            img_list.append(_img[2])
-            seg_list.append(_seg[2])
+    for _img, _target in zip(image_files, targets_path):
+        if _img.stem == _target.stem:
+            img_list.append(_img)
+            targets_list.append(_target)
 
-    return img_list, seg_list
+    return img_list, targets_list
 
 
 if __name__ == "__main__":
-    generation_date = "20220210"
-    demo_img_path = get_image_paths_from_dir(f"dataset/{generation_date}/images")[3]
+    generation_date = "20220303"
+    demo_img_path = get_image_paths_from_dir(f"dataset/{generation_date}/images")[0]
     t_data_path = f"dataset/{generation_date}/images/targets.npy"
     target_info = get_img_target_data(demo_img_path, t_data_path)
