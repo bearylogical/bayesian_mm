@@ -22,6 +22,17 @@ class ImageGenerator:
                  is_train_split: bool = True,
                  train_test_ratio: Union[float, None] = None,
                  force_images: bool = False):
+        """
+
+        Parameters
+        ----------
+        save_dir
+        dim
+        seed
+        is_train_split
+        train_test_ratio
+        force_images
+        """
         # TODO: Move this implementation to another method instead of running on initialisation
         if save_dir is None:  # initialise save dir as current date ISO8601 YYYYMMDD format
             temp_dir = Path.cwd() / 'dataset' / strftime("%Y%m%d")
