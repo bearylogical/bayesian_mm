@@ -1,7 +1,11 @@
 import logging
 from pathlib import Path
 from typing import Union
+
+import numpy as np
+
 from src.utils.constants import ACCEPTABLE_IMAGE_FORMATS
+from src.utils.transforms import normalize
 
 
 def get_PIL_version() -> list:
@@ -42,3 +46,9 @@ def get_format_files(path: Union[str, Path], file_formats=ACCEPTABLE_IMAGE_FORMA
         return sorted(files, key=lambda x: x.name)  # sort by the file nam
     else:
         return files
+
+
+def prepare_img_prediction(img_arr: np.ndarray):
+    sample_img = np.expand_dims(img_arr, -1)
+    sample_img = normalize(sample_img)
+    return np.reshape(sample_img, (1,) + sample_img.shape).astype('float32')
