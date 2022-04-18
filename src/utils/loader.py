@@ -367,7 +367,7 @@ def match_image_to_target(images_path: str, targets_path: str=None,
         targets_path = get_format_files(targets_path, file_formats=target_fmt, sort=True)
 
     if len(image_files) != len(targets_path):
-        raise DataLoaderError(f"Invalid number of image files ({len(image_files)}) vs segment files ({targets_path})")
+        raise DataLoaderError(f"Invalid number of image files ({len(image_files)}) vs label files ({len(targets_path)})")
 
     img_list, targets_list = [], []
 
