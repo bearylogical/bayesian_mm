@@ -38,9 +38,8 @@ class ImageGenerator:
             shutil.rmtree(self.save_dir)
             self.save_dir.mkdir(parents=True, exist_ok=True)
 
-        if is_segment:
-            self.save_segment_dir = self.save_dir / 'segment'
-            self.save_segment_dir.mkdir(exist_ok=True)
+        self.label_dir = self.save_dir / 'labels'
+        self.label_dir.mkdir(exist_ok=True)
 
         self.save_img_dir = self.save_dir / 'images'
         self.save_img_dir.mkdir(exist_ok=True)
