@@ -1,21 +1,25 @@
 # from src.utils.loader import get_pairs_from_paths
+import os
 from pathlib import Path
 
+import PIL.Image
 import matplotlib.pyplot as plt
 import matplotlib as mpl
 from matplotlib.patches import Rectangle
 import tensorflow as tf
-from PIL import Image
+from PIL import Image, ImageDraw
 import cv2
 import albumentations as A
 import numpy as np
 from src.utils.loader import get_image_paths_from_dir, RegressionDataLoaderT1, get_img_target_data, \
-    prepare_img_prediction, match_image_to_target
+    match_image_to_target, get_keypoint_from_ls, KeyPointDataLoader
+from src.utils.utilities import prepare_img_prediction
 from PIL import Image
 from typing import Union, List, Tuple
 import copy
 import random
-from keras import Model
+from keras import Model, models
+
 
 def display_mask(mask):
     """Quick utility to display a model's prediction."""
@@ -93,8 +97,8 @@ def display_composite(img: np.ndarray,
     bb_min, bb_max = np.amin(bb_box_coords), np.amax(bb_box_coords)
     if bb_max <= 1 and bb_min >= 0:
         x, y, width, height = A.convert_bbox_from_albumentations(bb_box_coords,
-                                           target_format='coco',
-                                           rows=img.shape[0], cols=img.shape[1])
+                                                                 target_format='coco',
+                                                                 rows=img.shape[0], cols=img.shape[1])
         xy = (x, y)
     else:
         xy, width, height = get_bb_box_outputs(bb_box_coords)
@@ -108,8 +112,8 @@ def display_composite(img: np.ndarray,
     plt.show()
 
 
-def _plot_keypoints(ax : plt.Axes,
-                    coords:np.ndarray,
+def _plot_keypoints(ax: plt.Axes,
+                    coords: np.ndarray,
                     marker_size=3,
                     label='Ground Truth',
                     marker_fmt='mo'):
@@ -120,6 +124,20 @@ def _plot_keypoints(ax : plt.Axes,
         ax.annotate(f'{idx}', (t_x, t_y))
 
 
+def overlay_keypoints(img: PIL.Image.Image,
+                      coords: np.ndarray,
+                      radius=1,
+                      label='Ground Truth',
+                      color='red',
+                      xy_offset=(10, -5)):
+    draw = ImageDraw.Draw(img)
+    for idx, (t_x, t_y) in enumerate(coords):
+        draw.text((t_x + xy_offset[0], t_y + xy_offset[1]), text=f'p{idx}', fill=color)
+        draw.ellipse([(t_x - radius, t_y - radius),
+                      (t_x + radius, t_y + radius)],
+                     outline=color, fill=color)
+
+
 def display_img_coords(img: np.ndarray,
                        true_coords: Union[np.ndarray, None] = None,
                        pred_coords: Union[np.ndarray, None] = None,
@@ -128,16 +146,15 @@ def display_img_coords(img: np.ndarray,
                        pred_marker_color='green'):
     """
     Viewer for overlaying target coords over src image
-    :param pred_marker_color:
-    :param true_marker_color:
-    :param marker_size:
-    :param pred_coords:
-    :param true_coords:
-    :param img:
+
+    :param pred_marker_color: marker color for the predictions. Defaults to green.
+    :param true_marker_color: marker color for the ground truth. Defaults to red.
+    :param marker_size: Size of markers.
+    :param pred_coords: Numpy array of prediction coordinates in [x0, y0, ..,  xN, yN] format
+    :param true_coords: Numpy array of prediction coordinates in [x0, y0, ..,  xN, yN] format
+    :param img: Image as a Numpy array.
     :return:
     """
-
-
 
     if true_coords is None and pred_coords is None:
         raise Exception('No coords supplied!')
@@ -146,8 +163,9 @@ def display_img_coords(img: np.ndarray,
     ax = fig.add_axes([0, 0, 1, 1])
     ax.imshow(img, cmap='gray', aspect='auto')
 
-    true_coords = true_coords.reshape(-1, 2)
-    _plot_keypoints(ax, true_coords, marker_size, 'Ground Truth')
+    if true_coords is not None:
+        true_coords = true_coords.reshape(-1, 2)
+        _plot_keypoints(ax, true_coords, marker_size, 'Ground Truth')
 
     if pred_coords is not None:
         pred_coords = pred_coords.reshape(-1, 2)
@@ -158,13 +176,46 @@ def display_img_coords(img: np.ndarray,
     plt.show()
 
 
-def display_augmentations(dataset: RegressionDataLoaderT1, batch_idx=0, idx=0, samples=10, cols=5):
+def show_image_coords(img: np.ndarray,
+                      true_coords: Union[np.ndarray, None] = None,
+                      pred_coords: Union[np.ndarray, None] = None,
+                      radius=2,
+                      true_marker_color='red',
+                      pred_marker_color='green')->Image.Image:
+    """
+    Viewer for overlaying target coords over src image
 
+    :param pred_marker_color: marker color for the predictions. Defaults to green.
+    :param true_marker_color: marker color for the ground truth. Defaults to red.
+    :param radius: Size of markers.
+    :param pred_coords: Numpy array of prediction coordinates in [x0, y0, ..,  xN, yN] format
+    :param true_coords: Numpy array of prediction coordinates in [x0, y0, ..,  xN, yN] format
+    :param img: Image as a Numpy array.
+    :return:
+    """
+
+    if true_coords is None and pred_coords is None:
+        raise Exception('No coords supplied!')
+
+    img = Image.fromarray(img).convert("RGB")
+
+    if true_coords is not None:
+        true_coords = true_coords.reshape(-1, 2)
+        overlay_keypoints(img, true_coords, radius=radius, color=true_marker_color)
+
+    if pred_coords is not None:
+        pred_coords = pred_coords.reshape(-1, 2)
+        overlay_keypoints(img, pred_coords, radius=radius, color=pred_marker_color)
+
+    return img
+
+
+def display_augmentations(dataset: Union[RegressionDataLoaderT1, KeyPointDataLoader], batch_idx=0, idx=0, samples=10,
+                          cols=5):
     if not isinstance(dataset, RegressionDataLoaderT1):
         raise Exception(f'Incorrect object type of dataset ({type(dataset)})')
 
     dataset_copy = copy.deepcopy(dataset)
-
 
     rows = samples // cols
     figure, ax = plt.subplots(nrows=rows, ncols=cols, figsize=(12, 6))
@@ -188,13 +239,22 @@ def display_augmentations(dataset: RegressionDataLoaderT1, batch_idx=0, idx=0, s
     plt.show()
 
 
+def display_keypoints_prediction(model: Model,
+                                 img_path: str,
+                                 true_keypoints: np.ndarray = None):
+    img_arr = cv2.imread(img_path, cv2.IMREAD_GRAYSCALE)
+    pred_coords = model.predict(prepare_img_prediction(img_arr))
+    rescale_pred_coords = np.array(list(get_keypoint_from_ls(img_arr.shape, list(pred_coords[0])).values()))
+    # TODO: Refactor as ImageModel method
+    display_img_coords(img_arr, true_keypoints, rescale_pred_coords)
+
+
 def display_predictions(model: Model,
                         img_dir: Union[str, Path],
-                        num_images:int=10,
-                        rows:int=2,
-                        img_size:Tuple[int, int] = (128,128),
-                        target_size: Union[Tuple[int, int], None]= (400, 400),):
-
+                        num_images: int = 10,
+                        rows: int = 2,
+                        img_size: Tuple[int, int] = (128, 128),
+                        target_size: Union[Tuple[int, int], None] = (400, 400), ):
     if not isinstance(model, Model):
         raise Exception(f'Incorrect object type of model ({type(model)})')
 
@@ -228,13 +288,23 @@ def display_predictions(model: Model,
     plt.tight_layout()
     plt.show()
 
+
 if __name__ == "__main__":
     img_dir = "dataset/experiments/15Apr"
     labels_dir = "dataset/experiments/15Apr/labels"
     # match data and labels
     imgs, labels = match_image_to_target(img_dir, labels_dir, target_fmt=[".json"])
-    t_img, data = get_img_target_data(imgs[0], labels[0])
-
+    img_path = Path(img_dir) / "8777d5e0-Inc_press_1_seq0023.png"
+    t_img, data = get_img_target_data(Path(img_dir) / "8777d5e0-Inc_press_1_seq0023.png",
+                                      Path(labels_dir) / "8777d5e0-Inc_press_1_seq0023.json")
 
     t_coords = np.array([v for v in data.values()])
-    display_img_coords(t_img, t_coords)
+    # vals = np.array([[ 7.471316, 55.25817 , 31.497335, 51.900547, 43.932575, 49.97762 ,
+    #     31.742086, 63.395126, 42.726536, 65.51687 , 29.972242, 57.527832,
+    #     45.319202, 57.237682]])
+    # vals = np.array(list(get_keypoint_from_ls(t_img.shape, vals[0]).values()))
+    show_image_coords(t_img, t_coords).show()
+
+    # model_path = "models/Baseline_20220417_1725"
+    # img_model = models.load_model(model_path)
+    # display_keypoints_prediction(img_model, str(img_path), t_coords)
