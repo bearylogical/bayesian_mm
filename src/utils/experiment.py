@@ -2,6 +2,9 @@ from tensorflow.keras.callbacks import Callback
 import wandb
 
 class LRLogger(Callback):
+    """
+    Callback for learn rate logging
+    """
     def __init__(self, optimizer):
       super(LRLogger, self).__init__()
       self.optimizer = optimizer
