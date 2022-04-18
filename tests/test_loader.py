@@ -39,6 +39,18 @@ class TestFileOperations:
         assert res[1]["y3"] == 264.
         assert res[1]["x4"] == 30.
 
+    def test_get_image_data_json_defaults(self, mock_img_keypoint_label):
+        mock_img_dir, mock_label_dir = mock_img_keypoint_label
+        mock_imgs, mock_labels = match_image_to_target(str(mock_img_dir),
+                                                       target_fmt=[".json"])
+        res_default = get_img_target_data(mock_imgs[0], mock_labels[0])
+        assert isinstance(res_default[0], np.ndarray)
+        assert res_default[0].shape == (600, 600)
+        assert len(res_default[1]) == 14
+        assert res_default[1]["x0"] == 6.
+        assert res_default[1]["y3"] == 264.
+        assert res_default[1]["x4"] == 30.
+
     def test_input_target_match(self, mock_img_keypoint_label):
         mock_img_dir, mock_label_dir = mock_img_keypoint_label
         mock_imgs, mock_labels = match_image_to_target(str(mock_img_dir),

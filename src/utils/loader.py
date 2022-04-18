@@ -10,16 +10,10 @@ from pathlib import Path
 import json
 import albumentations as A
 import cv2
-from src.utils.transforms import normalize, normalize_keypoints
+from src.utils.transforms import normalize
 from src.utils.utilities import get_format_files
 
 VALID_TASKS = ["T0", "T1"]
-
-
-# Code modified from Image Segmentation Keras library
-# Divam Gupta, Rounaq Wala , Marius Juston, JaledMC
-# https://github.com/divamgupta/image-segmentation-keras
-
 
 class DataLoaderError(Exception):
     pass
@@ -223,13 +217,20 @@ class SegmentDataLoader(BaseDataLoader):
         return x, y
 
 
-def prepare_img_prediction(img_arr: np.ndarray):
-    sample_img = np.expand_dims(img_arr, -1)
-    sample_img = normalize(sample_img)
-    return np.reshape(sample_img, (1,) + sample_img.shape).astype('float32')
+def get_keypoints_from_json(json_dict: dict, num_targets)->list:
+    """
+    Gets keypoints from dictionary of JSON object to return a list.
 
+    Parameters
+    ----------
+    json_dict: Dictionary obtained from JSON label file
+    num_targets: Returns paired keypoints based on num of targets.
+    Specifies the length of returned list by len(keypoints) = num_targets * 2.
 
-def get_keypoints_from_json(json_dict: dict, num_targets):
+    Returns
+    -------
+    A list of keypoints.
+    """
     keypoints = []
     points = [f"p{p}" for p in range(num_targets // 2)]
     for kp in points:
@@ -345,7 +346,7 @@ def get_img_target_data(img_path: Union[str, Path],
         raise Exception(f"Invalid extension of data path {data_path_ext}")
 
 
-def match_image_to_target(images_path: str, targets_path: str,
+def match_image_to_target(images_path: str, targets_path: str=None,
                           target_fmt: List[str] = ACCEPTABLE_IMAGE_FORMATS,
                           ignore_non_match: bool = True) -> Tuple[List, List]:
     """
@@ -360,7 +361,10 @@ def match_image_to_target(images_path: str, targets_path: str,
     """
 
     image_files = get_format_files(images_path, sort=True)
-    targets_path = get_format_files(targets_path, file_formats=target_fmt, sort=True)
+    if targets_path is None:
+        targets_path = get_format_files(os.path.join(images_path, "labels"), file_formats=target_fmt, sort=True)
+    else:
+        targets_path = get_format_files(targets_path, file_formats=target_fmt, sort=True)
 
     if len(image_files) != len(targets_path):
         raise DataLoaderError(f"Invalid number of image files ({len(image_files)}) vs segment files ({targets_path})")
