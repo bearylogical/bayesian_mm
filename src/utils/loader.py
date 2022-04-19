@@ -15,6 +15,7 @@ from src.utils.utilities import get_format_files
 
 VALID_TASKS = ["T0", "T1"]
 
+
 class DataLoaderError(Exception):
     pass
 
@@ -96,22 +97,6 @@ class BaseRegressionDataLoader(BaseDataLoader):
                 y[i] = _y
 
         return y
-
-
-class RegressionDataLoaderT0(BaseRegressionDataLoader):
-    def __init__(self, batch_size, img_size, input_img_paths, target_paths, num_targets=4, task=None, fields=None):
-        super().__init__(batch_size, img_size, input_img_paths, target_paths, fields, task)
-        self.num_targets = num_targets
-
-    def __getitem__(self, idx):
-        """Returns tuple (input, target) correspond to batch #idx."""
-        i = idx * self.batch_size
-        batch_input_img_paths = self.input_img_paths[i: i + self.batch_size]
-        batch_input_img_idx = [get_idx_from_img_path(f) for f in batch_input_img_paths]
-
-        x = self._get_input_image_data(batch_input_img_paths)
-        y = self._get_target_data(batch_input_img_idx, fields=self.fields)
-        return x, y
 
 
 class RegressionDataLoaderT1(BaseRegressionDataLoader):
@@ -217,7 +202,7 @@ class SegmentDataLoader(BaseDataLoader):
         return x, y
 
 
-def get_keypoints_from_json(json_dict: dict, num_targets)->list:
+def get_keypoints_from_json(json_dict: dict, num_targets) -> list:
     """
     Gets keypoints from dictionary of JSON object to return a list.
 
@@ -296,6 +281,7 @@ def get_target_data_from_idx(data: np.ndarray, img_idx: int, include_idx=False,
     else:
         return f_data[fields].item()
 
+
 def get_keypoint_from_ls(img_shape: tuple, kp_list: list):
     h_factor, w_factor = (v / 100 for v in img_shape)
     kps = {}
@@ -305,6 +291,7 @@ def get_keypoint_from_ls(img_shape: tuple, kp_list: list):
         else:
             kps[f"y{idx // 2}"] = v * h_factor
     return kps
+
 
 def get_img_target_data(img_path: Union[str, Path],
                         data_path: Union[str, Path],
@@ -331,7 +318,7 @@ def get_img_target_data(img_path: Union[str, Path],
     data_path_ext = os.path.splitext(data_path)[-1]
 
     if data_path_ext == ".npz":
-        img_idx = int(get_idx_from_img_path(img_path) ) # should be given
+        img_idx = int(get_idx_from_img_path(img_path))  # should be given
         src_data = np.load(data_path)[task]
         start_idx = 0 if include_idx else 1
         field_names = src_data.dtype.names[start_idx:]
@@ -346,7 +333,7 @@ def get_img_target_data(img_path: Union[str, Path],
         raise Exception(f"Invalid extension of data path {data_path_ext}")
 
 
-def match_image_to_target(images_path: str, targets_path: str=None,
+def match_image_to_target(images_path: str, targets_path: str = None,
                           target_fmt: List[str] = ACCEPTABLE_IMAGE_FORMATS,
                           ignore_non_match: bool = True) -> Tuple[List, List]:
     """
@@ -367,7 +354,8 @@ def match_image_to_target(images_path: str, targets_path: str=None,
         targets_path = get_format_files(targets_path, file_formats=target_fmt, sort=True)
 
     if len(image_files) != len(targets_path):
-        raise DataLoaderError(f"Invalid number of image files ({len(image_files)}) vs label files ({len(targets_path)})")
+        raise DataLoaderError(
+            f"Invalid number of image files ({len(image_files)}) vs label files ({len(targets_path)})")
 
     img_list, targets_list = [], []
 
