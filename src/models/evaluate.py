@@ -2,8 +2,7 @@ from keras import Model, models
 from tensorflow.keras.utils import Sequence
 from PIL import Image
 import numpy as np
-from src.utils.loader import KeyPointDataLoader, match_image_to_target, get_keypoint_dict_from_ls, rescale_kps_from_pct
-from tqdm import tqdm
+from src.utils.loader import KeyPointDataLoader, match_image_to_target, rescale_kps_from_pct
 import wandb
 from keras.callbacks import Callback
 
@@ -33,18 +32,17 @@ class LogImagePredictionPerNumEpochs(Callback):
 
             # dataloader normalizes intensities between 0 and 1
             _img_arr = data[0][img_idx_per_batch].squeeze() * 255.0
-            scaled_prediction = np.array(rescale_kps_from_pct(_img_arr.shape, list(prediction)))
-            scaled_ground_truth = np.array(rescale_kps_from_pct(_img_arr.shape, list(prediction)))
+            scaled_prediction = np.array(rescale_kps_from_pct(_img_arr.shape[::-1], list(prediction)))
+            scaled_ground_truth = np.array(rescale_kps_from_pct(_img_arr.shape[::-1], list(ground_truth)))
             # wandb specific code
             _original_img = Image.fromarray(_img_arr)
             _wandb_original_image = wandb.Image(_original_img.convert("RGB"))
             _wandb_ground_truth = wandb.Image(show_image_coords(_img_arr, true_coords=scaled_ground_truth))
             _wandb_predicted_image = wandb.Image(show_image_coords(_img_arr, pred_coords=scaled_prediction))
             _loss = np.linalg.norm(data[1][img_idx_per_batch] - prediction, axis=0)
-            #TODO : Fix black screen in WANDB
+            # TODO : Fix black screen in WANDB
             self.predictions_table.add_data(img_id, _wandb_original_image, _wandb_predicted_image, _wandb_ground_truth,
                                             _loss, wandb.run.id)
-
 
     def on_epoch_end(self, epoch, logs=None):
         if epoch % self.predict_every == 0:
@@ -71,7 +69,7 @@ def get_hardest_k_examples(model,
 
     predictions = model.predict(test_loader, verbose=0)
     truths = np.array([test_loader[idx][1][0] for idx in range(len(test_loader))])
-    losses = np.linalg.norm(predictions-truths, axis=1)
+    losses = np.linalg.norm(predictions - truths, axis=1)
     argsort_loss = np.argsort(losses)
     top_k_loss = argsort_loss[-k:]
     highest_k_losses = losses[top_k_loss]
