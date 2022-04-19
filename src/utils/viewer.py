@@ -196,8 +196,12 @@ def show_image_coords(img: np.ndarray,
 
     if true_coords is None and pred_coords is None:
         raise Exception('No coords supplied!')
-
-    img = Image.fromarray(img).convert("RGB")
+    if img.ndim != 3:
+        img = Image.fromarray(img).convert("RGB")
+    elif img.ndim ==3:
+        img = Image.fromarray(img, mode="RGB")
+    else:
+        raise Exception("Invalid image dimension")
 
     if true_coords is not None:
         true_coords = true_coords.reshape(-1, 2)
