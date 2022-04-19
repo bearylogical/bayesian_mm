@@ -2,7 +2,7 @@ from keras import Model, models
 from tensorflow.keras.utils import Sequence
 from PIL import Image
 import numpy as np
-from src.utils.loader import KeyPointDataLoader, match_image_to_target
+from src.utils.loader import KeyPointDataLoader, match_image_to_target, get_keypoint_from_ls
 from tqdm import tqdm
 import wandb
 from keras.callbacks import Callback
@@ -29,14 +29,17 @@ class LogImagePredictionPerNumEpochs(Callback):
         for batch_idx, data in enumerate(data_loader):
             img_id = str(batch_idx) + "_" + str(epoch)
             prediction = predictions[batch_idx * len(data[0]) + img_idx_per_batch]
+            ground_truth = data[1][img_idx_per_batch]
 
             # dataloader normalizes intensities between 0 and 1
             _img_arr = data[0][img_idx_per_batch].squeeze() * 255.0
+            scaled_prediction = get_keypoint_from_ls(_img_arr.shape, list(prediction))
+            scaled_ground_truth = get_keypoint_from_ls(_img_arr.shape, list(prediction))
             # wandb specific code
             _original_img = Image.fromarray(_img_arr)
             _wandb_original_image = wandb.Image(_original_img.convert("RGB"))
-            _wandb_ground_truth = wandb.Image(show_image_coords(_img_arr, true_coords=data[1][img_idx_per_batch]))
-            _wandb_predicted_image = wandb.Image(show_image_coords(_img_arr, pred_coords=prediction))
+            _wandb_ground_truth = wandb.Image(show_image_coords(_img_arr, true_coords=scaled_ground_truth))
+            _wandb_predicted_image = wandb.Image(show_image_coords(_img_arr, pred_coords=scaled_prediction))
             _loss = np.linalg.norm(data[1][img_idx_per_batch] - prediction, axis=0)
             #TODO : Fix black screen in WANDB
             self.predictions_table.add_data(img_id, _wandb_original_image, _wandb_predicted_image, _wandb_ground_truth,
