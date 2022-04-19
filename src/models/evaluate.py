@@ -11,7 +11,7 @@ from src.utils.viewer import show_image_coords
 
 
 class LogImagePredictionPerNumEpochs(Callback):
-    def __init__(self, data_loader, predict_every=10):
+    def __init__(self, data_loader, predict_every=5):
         super().__init__()
         self.data_loader = data_loader
         self.predict_every = predict_every
@@ -20,28 +20,35 @@ class LogImagePredictionPerNumEpochs(Callback):
         self._create_predictions_table()
 
     def _create_predictions_table(self):
-        columns = ["id", "image", "predictions", "truth", "loss"]
+        columns = ["id", "image", "predictions", "truth", "loss", "run_id"]
         self.predictions_table = wandb.Table(columns=columns)
 
     def _log_predictions(self, data_loader: Sequence, epoch):
-        predictions = self.model.predict(data_loader).numpy()
-        _id = 0
-        for idx, (data, prediction) in enumerate(zip(data_loader, predictions)):
-            img_id = str(_id) + "_" + str(epoch)
-            _img_arr = data[0]
+        predictions = self.model.predict(data_loader)
+        img_idx_per_batch = 3
+        for batch_idx, data in enumerate(data_loader):
+            img_id = str(batch_idx) + "_" + str(epoch)
+            prediction = predictions[batch_idx * len(data[0]) + img_idx_per_batch]
+
+            # dataloader normalizes intensities between 0 and 1
+            _img_arr = data[0][img_idx_per_batch].squeeze() * 255.0
+            # wandb specific code
             _original_img = Image.fromarray(_img_arr)
-            _wandb_original_image = wandb.Image(_original_img)
-            _wandb_ground_truth = wandb.Image(show_image_coords(_img_arr, true_coords=data[1]))
+            _wandb_original_image = wandb.Image(_original_img.convert("RGB"))
+            _wandb_ground_truth = wandb.Image(show_image_coords(_img_arr, true_coords=data[1][img_idx_per_batch]))
             _wandb_predicted_image = wandb.Image(show_image_coords(_img_arr, pred_coords=prediction))
-            _loss = np.linalg.norm(data[1] - prediction, axis=1)
+            _loss = np.linalg.norm(data[1][img_idx_per_batch] - prediction, axis=0)
+            #TODO : Fix black screen in WANDB
             self.predictions_table.add_data(img_id, _wandb_original_image, _wandb_predicted_image, _wandb_ground_truth,
-                                            _loss)
-            if _id == self.num_images_per_batch:
-                break
+                                            _loss, wandb.run.id)
+
 
     def on_epoch_end(self, epoch, logs=None):
         if epoch % self.predict_every == 0:
-            self.log_predictions(self.data_loader, epoch)
+            self._log_predictions(self.data_loader, epoch)
+
+    def on_train_end(self, logs=None):
+        wandb.log({"test_predictions": self.predictions_table})
 
 
 def evaluate(model: Model, test_loader: KeyPointDataLoader):
