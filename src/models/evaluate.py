@@ -66,10 +66,10 @@ def evaluate(model: Model, test_loader: KeyPointDataLoader):
     ## Evaluate the trained model
     """
 
-    loss, accuracy = model.evaluate(test_loader)
+    loss = model.evaluate(test_loader)
     highest_losses, hardest_examples, true_labels, predictions, hardest_k_names = get_hardest_k_examples(model, test_loader)
 
-    return loss, accuracy, highest_losses, hardest_examples, true_labels, predictions, hardest_k_names
+    return loss, highest_losses, hardest_examples, true_labels, predictions, hardest_k_names
 
 
 def get_hardest_k_examples(model,
@@ -97,4 +97,5 @@ if __name__ == "__main__":
     model_path = "models/Baseline_20220417_1725"
     img_model = models.load_model(model_path)
     val_loader = KeyPointDataLoader(input_img_paths=imgs, target_paths=labels, batch_size=1, img_size=(128, 128))
-    get_hardest_k_examples(img_model, val_loader)
+    evaluate(img_model, val_loader)
+    # get_hardest_k_examples(img_model, val_loader)
