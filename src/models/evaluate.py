@@ -19,7 +19,7 @@ class LogImagePredictionPerNumEpochs(Callback):
         self._create_predictions_table()
 
     def _create_predictions_table(self):
-        columns = ["id", "image", "predictions", "truth", "loss", "run_id"]
+        columns = ["id", "epoch","img_num", "image", "predictions", "truth", "loss", "run_id"]
         self.predictions_table = wandb.Table(columns=columns)
 
     def _log_predictions(self, data_loader: Sequence, epoch):
@@ -27,6 +27,7 @@ class LogImagePredictionPerNumEpochs(Callback):
         img_idx_per_batch = 3
         for batch_idx, data in enumerate(data_loader):
             img_id = str(batch_idx) + "_" + str(epoch)
+            img_num = batch_idx * len(data[0]) + img_idx_per_batch
             prediction = predictions[batch_idx * len(data[0]) + img_idx_per_batch]
             ground_truth = data[1][img_idx_per_batch]
 
@@ -40,10 +41,11 @@ class LogImagePredictionPerNumEpochs(Callback):
             _wandb_ground_truth = wandb.Image(show_image_coords(_img_arr,
                                                                 true_coords=scaled_ground_truth, xy_offset=(2, -2)))
             _wandb_predicted_image = wandb.Image(show_image_coords(_img_arr,
-                                                                   pred_coords=scaled_prediction,  xy_offset=(2, -2)))
+                                                                   pred_coords=scaled_prediction, xy_offset=(2, -2)))
             _loss = np.linalg.norm(data[1][img_idx_per_batch] - prediction, axis=0)
 
-            self.predictions_table.add_data(img_id, _wandb_original_image, _wandb_predicted_image, _wandb_ground_truth,
+            self.predictions_table.add_data(img_id, epoch, img_num, _wandb_original_image, _wandb_predicted_image,
+                                            _wandb_ground_truth,
                                             _loss, wandb.run.id)
 
     def on_epoch_end(self, epoch, logs=None):
