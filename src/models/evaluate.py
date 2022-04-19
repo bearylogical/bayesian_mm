@@ -32,8 +32,8 @@ class LogImagePredictionPerNumEpochs(Callback):
 
             # dataloader normalizes intensities between 0 and 1
             _img_arr = data[0][img_idx_per_batch].squeeze() * 255.0
-            scaled_prediction = np.array(rescale_kps_from_pct(_img_arr.shape[::-1], list(prediction)))
-            scaled_ground_truth = np.array(rescale_kps_from_pct(_img_arr.shape[::-1], list(ground_truth)))
+            scaled_prediction = np.array(rescale_kps_from_pct(_img_arr.shape, list(prediction)))
+            scaled_ground_truth = np.array(rescale_kps_from_pct(_img_arr.shape, list(ground_truth)))
             # wandb specific code
             _original_img = Image.fromarray(_img_arr)
             _wandb_original_image = wandb.Image(_original_img.convert("RGB"))
