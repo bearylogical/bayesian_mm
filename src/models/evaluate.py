@@ -67,9 +67,9 @@ def evaluate(model: Model, test_loader: KeyPointDataLoader):
     """
 
     loss, accuracy = model.evaluate(test_loader)
-    highest_losses, hardest_examples, true_labels, predictions = get_hardest_k_examples(model, test_loader)
+    highest_losses, hardest_examples, true_labels, predictions, hardest_k_names = get_hardest_k_examples(model, test_loader)
 
-    return loss, accuracy, highest_losses, hardest_examples, true_labels, predictions
+    return loss, accuracy, highest_losses, hardest_examples, true_labels, predictions, hardest_k_names
 
 
 def get_hardest_k_examples(model,
@@ -79,14 +79,15 @@ def get_hardest_k_examples(model,
     predictions = model.predict(test_loader, verbose=0)
     truths = np.array([test_loader[idx][1][0] for idx in range(len(test_loader))])
     losses = np.linalg.norm(predictions - truths, axis=1)
-    argsort_loss = np.argsort(losses)
-    top_k_loss = argsort_loss[-k:]
+    argsort_loss = np.argsort(losses) # indices of sorted losses
+    top_k_loss = argsort_loss[-k:] # top K loss indices
     highest_k_losses = losses[top_k_loss]
 
+    hardest_k_names = [test_loader.input_img_paths[idx].name for idx in top_k_loss]
     hardest_k_examples = [test_loader[top_idx][0] for top_idx in top_k_loss]
     true_labels = [test_loader[top_idx][1] for top_idx in top_k_loss]
     predictions = [model.predict(example) for example in hardest_k_examples]
-    return highest_k_losses, hardest_k_examples, true_labels, predictions
+    return highest_k_losses, hardest_k_examples, true_labels, predictions, hardest_k_names
 
 
 if __name__ == "__main__":
