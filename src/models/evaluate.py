@@ -40,7 +40,8 @@ class LogImagePredictionPerNumEpochs(Callback):
             _wandb_original_image = wandb.Image(_original_img.convert("RGB"))
             image_kwargs = {
                 "radius": 1,
-                "xy_offset": (5, -2)
+                "xy_offset": (3, 1),
+                "font_size": 5
             }
             _wandb_ground_truth = wandb.Image(
                 show_image_coords(_img_arr, true_coords=scaled_ground_truth, **image_kwargs))
