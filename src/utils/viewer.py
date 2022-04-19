@@ -130,7 +130,7 @@ def overlay_keypoints(img: PIL.Image.Image,
                       show_labels: bool = True,
                       color='red',
                       xy_offset=(10, -5),
-                      font_size=10):
+                      font_size=6):
     draw = ImageDraw.Draw(img)
     try:
         font = ImageFont.truetype("arial.ttf", font_size)
@@ -192,7 +192,8 @@ def show_image_coords(img: np.ndarray,
                       true_marker_color='red',
                       pred_marker_color='green',
                       xy_offset=(10, -5),
-                      show_labels: bool = True) -> Image.Image:
+                      show_labels: bool = True,
+                      font_size=6) -> Image.Image:
     """
     Viewer for overlaying target coords over src image
 
@@ -224,15 +225,21 @@ def show_image_coords(img: np.ndarray,
     else:
         raise Exception("Invalid image dimension")
 
+    img_kwargs = {
+        "radius": radius,
+        "xy_offset": xy_offset,
+        "show_labels": show_labels,
+        "font_size": font_size
+    }
+
     if true_coords is not None:
         true_coords = true_coords.reshape(-1, 2)
-        overlay_keypoints(img, true_coords, radius=radius,
-                          color=true_marker_color, xy_offset=xy_offset, show_labels=show_labels)
+        overlay_keypoints(img, true_coords,
+                          color=true_marker_color, **img_kwargs)
 
     if pred_coords is not None:
         pred_coords = pred_coords.reshape(-1, 2)
-        overlay_keypoints(img, pred_coords, radius=radius,
-                          color=pred_marker_color, xy_offset=xy_offset, show_labels=show_labels)
+        overlay_keypoints(img, pred_coords, color=pred_marker_color, **img_kwargs)
 
     return img
 
