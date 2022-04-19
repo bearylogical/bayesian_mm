@@ -12,7 +12,7 @@ import cv2
 import albumentations as A
 import numpy as np
 from src.utils.loader import get_image_paths_from_dir, RegressionDataLoaderT1, get_img_target_data, \
-    match_image_to_target, get_keypoint_from_ls, KeyPointDataLoader
+    match_image_to_target, get_keypoint_dict_from_ls, KeyPointDataLoader
 from src.utils.utilities import prepare_img_prediction
 from PIL import Image
 from typing import Union, List, Tuple
@@ -248,7 +248,7 @@ def display_keypoints_prediction(model: Model,
                                  true_keypoints: np.ndarray = None):
     img_arr = cv2.imread(img_path, cv2.IMREAD_GRAYSCALE)
     pred_coords = model.predict(prepare_img_prediction(img_arr))
-    rescale_pred_coords = np.array(list(get_keypoint_from_ls(img_arr.shape, list(pred_coords[0])).values()))
+    rescale_pred_coords = np.array(list(get_keypoint_dict_from_ls(img_arr.shape, list(pred_coords[0])).values()))
     # TODO: Refactor as ImageModel method
     display_img_coords(img_arr, true_keypoints, rescale_pred_coords)
 

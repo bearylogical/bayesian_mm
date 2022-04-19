@@ -2,7 +2,7 @@ from keras import Model, models
 from tensorflow.keras.utils import Sequence
 from PIL import Image
 import numpy as np
-from src.utils.loader import KeyPointDataLoader, match_image_to_target, get_keypoint_from_ls
+from src.utils.loader import KeyPointDataLoader, match_image_to_target, get_keypoint_dict_from_ls, rescale_kps_from_pct
 from tqdm import tqdm
 import wandb
 from keras.callbacks import Callback
@@ -33,8 +33,8 @@ class LogImagePredictionPerNumEpochs(Callback):
 
             # dataloader normalizes intensities between 0 and 1
             _img_arr = data[0][img_idx_per_batch].squeeze() * 255.0
-            scaled_prediction = get_keypoint_from_ls(_img_arr.shape, list(prediction))
-            scaled_ground_truth = get_keypoint_from_ls(_img_arr.shape, list(prediction))
+            scaled_prediction = np.array(rescale_kps_from_pct(_img_arr.shape, list(prediction)))
+            scaled_ground_truth = np.array(rescale_kps_from_pct(_img_arr.shape, list(prediction)))
             # wandb specific code
             _original_img = Image.fromarray(_img_arr)
             _wandb_original_image = wandb.Image(_original_img.convert("RGB"))

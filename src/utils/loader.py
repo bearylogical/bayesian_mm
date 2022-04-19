@@ -282,15 +282,20 @@ def get_target_data_from_idx(data: np.ndarray, img_idx: int, include_idx=False,
         return f_data[fields].item()
 
 
-def get_keypoint_from_ls(img_shape: tuple, kp_list: list):
+def get_keypoint_dict_from_ls(img_shape: tuple, kp_list: list) -> dict:
+    _rescaled_kps = rescale_kps_from_pct(img_shape, kp_list)
+    return {f"x{idx // 2}" if idx % 2 == 0 else f"y{idx // 2}": v for idx, v in enumerate(_rescaled_kps)}
+
+
+def rescale_kps_from_pct(img_shape: tuple, kp_list: list) -> list:
     h_factor, w_factor = (v / 100 for v in img_shape)
-    kps = {}
+    _rescaled_kps = []
     for idx, v in enumerate(kp_list):
         if idx % 2 == 0:
-            kps[f"x{idx // 2}"] = v * w_factor
+            _rescaled_kps.append(v * w_factor)
         else:
-            kps[f"y{idx // 2}"] = v * h_factor
-    return kps
+            _rescaled_kps.append(v * h_factor)
+    return _rescaled_kps
 
 
 def get_img_target_data(img_path: Union[str, Path],
@@ -327,7 +332,7 @@ def get_img_target_data(img_path: Union[str, Path],
 
     elif data_path_ext == ".json":
         kps_list = get_keypoints_from_json(json.load(open(data_path)), 14)
-        return img, get_keypoint_from_ls(img.shape, kps_list)
+        return img, get_keypoint_dict_from_ls(img.shape, kps_list)
 
     else:
         raise Exception(f"Invalid extension of data path {data_path_ext}")
