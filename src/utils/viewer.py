@@ -127,12 +127,13 @@ def _plot_keypoints(ax: plt.Axes,
 def overlay_keypoints(img: PIL.Image.Image,
                       coords: np.ndarray,
                       radius=1,
-                      label='Ground Truth',
+                      show_labels: bool = True,
                       color='red',
                       xy_offset=(10, -5)):
     draw = ImageDraw.Draw(img)
     for idx, (t_x, t_y) in enumerate(coords):
-        draw.text((t_x + xy_offset[0], t_y + xy_offset[1]), text=f'p{idx}', fill=color)
+        if show_labels:
+            draw.text((t_x + xy_offset[0], t_y + xy_offset[1]), text=f'{idx}', fill=color)
         draw.ellipse([(t_x - radius, t_y - radius),
                       (t_x + radius, t_y + radius)],
                      outline=color, fill=color)
@@ -181,7 +182,9 @@ def show_image_coords(img: np.ndarray,
                       pred_coords: Union[np.ndarray, None] = None,
                       radius=2,
                       true_marker_color='red',
-                      pred_marker_color='green')->Image.Image:
+                      pred_marker_color='green',
+                      xy_offset=(10, -5),
+                      show_labels: bool = True) -> Image.Image:
     """
     Viewer for overlaying target coords over src image
 
@@ -191,25 +194,37 @@ def show_image_coords(img: np.ndarray,
     :param pred_coords: Numpy array of prediction coordinates in [x0, y0, ..,  xN, yN] format
     :param true_coords: Numpy array of prediction coordinates in [x0, y0, ..,  xN, yN] format
     :param img: Image as a Numpy array.
+    :param xy_offset: Offset of keypoint in xy tuple.
+    :param show_labels: Flag to display the keypoint label as a text.
     :return:
+
+    Parameters
+    ----------
+    show_labels
+    xy_offset
+    xy_offset
+    xy_offset
+    xy_offset
     """
 
     if true_coords is None and pred_coords is None:
         raise Exception('No coords supplied!')
     if img.ndim != 3:
         img = Image.fromarray(img).convert("RGB")
-    elif img.ndim ==3:
+    elif img.ndim == 3:
         img = Image.fromarray(img, mode="RGB")
     else:
         raise Exception("Invalid image dimension")
 
     if true_coords is not None:
         true_coords = true_coords.reshape(-1, 2)
-        overlay_keypoints(img, true_coords, radius=radius, color=true_marker_color)
+        overlay_keypoints(img, true_coords, radius=radius,
+                          color=true_marker_color, xy_offset=xy_offset, show_labels=show_labels)
 
     if pred_coords is not None:
         pred_coords = pred_coords.reshape(-1, 2)
-        overlay_keypoints(img, pred_coords, radius=radius, color=pred_marker_color)
+        overlay_keypoints(img, pred_coords, radius=radius,
+                          color=pred_marker_color, xy_offset=xy_offset, show_labels=show_labels)
 
     return img
 

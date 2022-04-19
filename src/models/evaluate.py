@@ -37,10 +37,12 @@ class LogImagePredictionPerNumEpochs(Callback):
             # wandb specific code
             _original_img = Image.fromarray(_img_arr)
             _wandb_original_image = wandb.Image(_original_img.convert("RGB"))
-            _wandb_ground_truth = wandb.Image(show_image_coords(_img_arr, true_coords=scaled_ground_truth))
-            _wandb_predicted_image = wandb.Image(show_image_coords(_img_arr, pred_coords=scaled_prediction))
+            _wandb_ground_truth = wandb.Image(show_image_coords(_img_arr,
+                                                                true_coords=scaled_ground_truth, xy_offset=(2, -2)))
+            _wandb_predicted_image = wandb.Image(show_image_coords(_img_arr,
+                                                                   pred_coords=scaled_prediction,  xy_offset=(2, -2)))
             _loss = np.linalg.norm(data[1][img_idx_per_batch] - prediction, axis=0)
-            # TODO : Fix black screen in WANDB
+
             self.predictions_table.add_data(img_id, _wandb_original_image, _wandb_predicted_image, _wandb_ground_truth,
                                             _loss, wandb.run.id)
 
