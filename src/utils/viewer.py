@@ -1,7 +1,7 @@
 # from src.utils.loader import get_pairs_from_paths
 import os
 from pathlib import Path
-
+import matplotlib as mpl
 import PIL.Image
 import matplotlib.pyplot as plt
 import matplotlib as mpl
@@ -132,7 +132,13 @@ def overlay_keypoints(img: PIL.Image.Image,
                       xy_offset=(10, -5),
                       font_size=3):
     draw = ImageDraw.Draw(img)
-    font = ImageFont.truetype("arial.ttf", font_size)
+    try:
+        font = ImageFont.truetype("arial.ttf", font_size)
+    except OSError:
+        # use matplotlib font as backup
+        font_path = Path(mpl.get_data_path(), "fonts/ttf/DejaVuSans.ttf")
+        font = ImageFont.truetype(str(font_path), font_size)
+
     for idx, (t_x, t_y) in enumerate(coords):
         if show_labels:
             draw.text((t_x + xy_offset[0], t_y + xy_offset[1]), text=f'{idx}', fill=color, font=font)
