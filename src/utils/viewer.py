@@ -7,7 +7,7 @@ import matplotlib.pyplot as plt
 import matplotlib as mpl
 from matplotlib.patches import Rectangle
 import tensorflow as tf
-from PIL import Image, ImageDraw
+from PIL import Image, ImageDraw, ImageFont
 import cv2
 import albumentations as A
 import numpy as np
@@ -129,11 +129,13 @@ def overlay_keypoints(img: PIL.Image.Image,
                       radius=1,
                       show_labels: bool = True,
                       color='red',
-                      xy_offset=(10, -5)):
+                      xy_offset=(10, -5),
+                      font_size=3):
     draw = ImageDraw.Draw(img)
+    font = ImageFont.truetype("arial.ttf", font_size)
     for idx, (t_x, t_y) in enumerate(coords):
         if show_labels:
-            draw.text((t_x + xy_offset[0], t_y + xy_offset[1]), text=f'{idx}', fill=color)
+            draw.text((t_x + xy_offset[0], t_y + xy_offset[1]), text=f'{idx}', fill=color, font=font)
         draw.ellipse([(t_x - radius, t_y - radius),
                       (t_x + radius, t_y + radius)],
                      outline=color, fill=color)
