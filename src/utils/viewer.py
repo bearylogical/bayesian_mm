@@ -130,7 +130,7 @@ def overlay_keypoints(img: PIL.Image.Image,
                       show_labels: bool = True,
                       color='red',
                       xy_offset=(10, -5),
-                      font_size=3):
+                      font_size=10):
     draw = ImageDraw.Draw(img)
     try:
         font = ImageFont.truetype("arial.ttf", font_size)
