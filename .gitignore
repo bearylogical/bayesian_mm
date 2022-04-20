@@ -7,3 +7,5 @@ wandb/
 /wandb/
 /.idea/
 __pycache__/
+/streamlit_keypoints/
+/models/
