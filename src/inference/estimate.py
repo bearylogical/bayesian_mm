@@ -6,6 +6,7 @@ import scipy.stats as stats
 import numpy as np
 import emcee
 from src.inference.models.model import IsotropicModel, BayesModel
+from src.inference.plots import plot_r_l_scatter, plot_g_k_bands
 from src.utils.transforms import normalise_bands
 from src.utils.utilities import set_logger
 
@@ -71,7 +72,7 @@ def plot_corner(sampler: emcee.EnsembleSampler,
         ax.plot(params, probs, 'b--')
 
     if save_path:
-        plt.savefig(save_path  / 'cornerplot.png')
+        plt.savefig(save_path / 'cornerplot.png')
 
     plt.show()
     return flat_samples
@@ -83,20 +84,15 @@ def run_experiment(model, num_synthetic, custom_experiment_name=None):
     n_rl_0 = normalise_bands(rl_0, img_size=img_size)
     # observed = np.array([95.014, 390.641])
     # p_0 = 11220.0
-
-    length_scale = 1e3
-    # constants
-    true_G = 10024.9056 / length_scale
-    true_K = 60996.0301 / length_scale
-    true_p_factor = 1.77776
+    length_scale = 1e5
+    material_params = {
+        "G": 10024.9056 / length_scale,
+        "K": 60996.0301 / length_scale,
+        "p_factor": 1.77776,
+        "length_scale": length_scale
+    }
     logger.info('Generating Data')
-    pressures = np.linspace(1e3, 3e4, num_synthetic) / length_scale
-    pressures = np.expand_dims(pressures, 1)
-    # define our inputs
-    initial_bands = np.expand_dims(n_rl_0, 0)
-    # initial_bands_noise = initial_bands + np.array([1e-2, 1e-2]) * np.random.randn(2).T
-    initial_bands = np.repeat(initial_bands, num_synthetic, axis=0)
-    x = np.append(initial_bands, pressures, axis=1)
+    x, y, y_noise = generate_data(n_rl_0, model, num_obs=num_obs, m_observations=num_experiment, **material_params)
 
     y = isotropic.predict([true_G, true_K, true_p_factor], x)
     y_noise = y + np.array([1e-3, 1e-3]) * np.random.randn(2, num_synthetic).T
@@ -106,13 +102,13 @@ def run_experiment(model, num_synthetic, custom_experiment_name=None):
     N_walkers = 100
     # get starting points
     start_pos = model.sample_prior(N_walkers)
-    with Pool() as pool:
-        sampler = emcee.EnsembleSampler(N_walkers, model.n_params, model.log_posterior, args=(x, y_noise), pool=pool)
-        start = time()
-        sampler.run_mcmc(start_pos, 5000, progress=True)
-        end = time()
-        multi_time = end - start
-        logger.info("Sampling took {0:.1f} seconds".format(multi_time))
+
+    sampler = emcee.EnsembleSampler(N_walkers, model.n_params, model.log_posterior, args=(x, y_noise))
+    start = time()
+    sampler.run_mcmc(start_pos, 5000, progress=True)
+    end = time()
+    multi_time = end - start
+    logger.info("Sampling took {0:.1f} seconds".format(multi_time))
 
     temp_dir = Path.cwd() / 'estimation' / strftime("%Y%m%d")
     experiment_name = strftime("%Y%m%d_%H%M") if custom_experiment_name is None else custom_experiment_name
@@ -123,9 +119,10 @@ def run_experiment(model, num_synthetic, custom_experiment_name=None):
     logger.info('Generating Trace plot')
     plot_trace(sampler, model, temp_path)
     logger.info('Generating Cornerplot')
-    samples = plot_corner(sampler, model, truths=[true_G, true_K, true_p_factor], save_path=temp_path)
+    samples = plot_corner(sampler, model, truths=list(material_params.values())[:3], save_path=temp_path)
 
     return samples
+
 
 def main():
     model = isotropic
