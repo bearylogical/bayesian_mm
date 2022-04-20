@@ -145,3 +145,11 @@ def project_point(line: Line, p: Point) -> Point:
     y = line(x)
 
     return Point(x, y)
+
+
+def get_line_param(x_coords, y_coords) -> Line:
+    # polyfit returns _increasing_ degree (different from matlab)
+
+    return Line(*np.polynomial.Polynomial.fit(
+        x_coords, y_coords, 1, domain=[0, 1], window=[0, 1]
+    ).coef.tolist())
