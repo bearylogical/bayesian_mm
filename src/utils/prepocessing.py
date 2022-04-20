@@ -6,14 +6,15 @@ import numpy as np
 import matplotlib.pyplot as plt
 from scipy.stats import cumfreq
 from skimage.draw import line
-from src.utils.mechanics import Point
+from src.utils.mechanics import CapillaryStressBalance
+from src.utils.geometry import Point
 from src.utils.shapes.capillary import sort_xy
 from src.utils.transforms import reject_outliers, normalize, divide_by_zero
 import random
 from pathlib import Path
 from time import strftime
 from typing import List, Tuple, Union
-
+from PIL import Image
 
 def countour_thresh(img, val=10):
     threshold = val
@@ -34,6 +35,10 @@ def _plt_image(img):
     plt.imshow(img, cmap='gray_r')
     plt.show()
 
+def show_lines(img, lines):
+    for l in lines:
+        draw_line(img, l)
+    Image.fromarray(img).show()
 
 def preprocess_lines(img: np.ndarray,
                      debug: bool = False,
@@ -51,41 +56,45 @@ def preprocess_lines(img: np.ndarray,
     if linesP is not None and len(linesP) > 4:
         print(f'{linesP.shape[0]} Lines Detected')
         linesP = np.squeeze(linesP, 1)
-        outer_lines = get_outer_edges(linesP)
-
-        _, y_c = get_intersection_point(outer_lines[0], outer_lines[1])
-
-        lb = left_boundary(canny_, midpoint_y=y_c)
-
-        inner_lines = get_inner_edges(linesP, y_c)
-        # shift new mid point line to between inner edges
-
-        filtered_lines = np.vstack([outer_lines, inner_lines])
-        filtered_lines = np.apply_along_axis(extend_line, axis=1, arr=filtered_lines, xcoord=lb)
-        if show_original:
-            img_copy = img
-
         if debug:
-            for l in linesP:
+            show_lines(img, linesP)
+
+        try:
+            outer_lines = get_outer_edges(linesP)
+
+            _, y_c = get_intersection_point(outer_lines[0], outer_lines[1])
+
+            lb = left_boundary(canny_, midpoint_y=y_c)
+
+            inner_lines = get_inner_edges(linesP, y_c)
+            # shift new mid point line to between inner edges
+
+            filtered_lines = np.vstack([outer_lines, inner_lines])
+            filtered_lines = np.apply_along_axis(extend_line, axis=1, arr=filtered_lines, xcoord=lb)
+            if show_original:
+                img_copy = img
+
+                    # cv2.line(img_copy, (l[0], l[1]), (l[2], l[3]), 255, 3)
+
+            for l in filtered_lines:
+                # l = extend_line(l_o, lb)
                 draw_line(img_copy, l)
-                # cv2.line(img_copy, (l[0], l[1]), (l[2], l[3]), 255, 3)
 
-        for l in filtered_lines:
-            # l = extend_line(l_o, lb)
-            draw_line(img_copy, l)
+            base_y_c = np.min(filtered_lines[2, 1])
+            y_c = base_y_c + abs(filtered_lines[2, 1] - filtered_lines[3, 1]) // 2
+            mid_line = np.array([lb, y_c, img.shape[1], y_c])
+            draw_line(img_copy, mid_line)
+            # cv2.line(img_copy,(mid_line[0], mid_line[1]), (mid_line[2], mid_line[3]) , 255, 3)
+            cv2.circle(img_copy, (lb, y_c), radius=2, color=255, thickness=-1)
+
+            return img_copy, CapillaryStruct(filtered_lines[2],
+                                             filtered_lines[3],
+                                             mid_line,
+                                             lb=lb)
+        except ValueError:
+            show_lines(img, linesP)
+            exit()
             # cv2.line(img_copy, (l[0], l[1]), (l[2], l[3]), 255, 3)
-
-        base_y_c = np.min(filtered_lines[2, 1])
-        y_c = base_y_c + abs(filtered_lines[2, 1] - filtered_lines[3, 1]) // 2
-        mid_line = np.array([lb, y_c, img.shape[1], y_c])
-        draw_line(img_copy, mid_line)
-        # cv2.line(img_copy,(mid_line[0], mid_line[1]), (mid_line[2], mid_line[3]) , 255, 3)
-        cv2.circle(img_copy, (lb, y_c), radius=2, color=255, thickness=-1)
-
-        return img_copy, CapillaryStruct(filtered_lines[2],
-                                         filtered_lines[3],
-                                         mid_line,
-                                         lb=lb)
     else:
         print("No lines detected")
 
@@ -222,9 +231,12 @@ def get_region_of_interest(img_arr: np.ndarray,
 
 def isolate_particle(img_arr: np.ndarray,
                      points: np.ndarray,
-                     min_threshold: int = 50) -> np.ndarray:
+                     dst_img_size: Tuple[int, int] = None,
+                     min_threshold: int = 50,
+                     ) -> np.ndarray:
     """
 
+    :param dst_img_size: Size of img if specified
     :param img_arr:
     :param points:
     :param min_threshold:
@@ -243,6 +255,8 @@ def isolate_particle(img_arr: np.ndarray,
     masked = cv2.bitwise_and(_img_arr, _img_arr, mask=mask)
     _new_img = white_bg + masked
     _new_img[_new_img < min_threshold] = 255
+    if dst_img_size:
+        _new_img = cv2.resize(_new_img, dst_img_size)
 
     return _new_img
 
@@ -270,7 +284,7 @@ def get_auto_contrast_params(img: np.ndarray,
 
 
 def apply_contrast(img: np.ndarray,
-                   method:str='auto') -> np.ndarray:
+                   method: str = 'auto') -> np.ndarray:
     """
     Apply contrast to img according to transformation
     g' = alpha * g + beta
@@ -284,11 +298,11 @@ def apply_contrast(img: np.ndarray,
     """
     method = method.lower()
     _img = copy.deepcopy(img)
-    if method =='auto':
+    if method == 'auto':
         a, b = get_auto_contrast_params(_img, (5, 70))
         return cv2.convertScaleAbs(_img, alpha=a, beta=b)
-    elif method=='clahe':
-        clahe = cv2.createCLAHE(clipLimit=1.0, tileGridSize=(8,8))
+    elif method == 'clahe':
+        clahe = cv2.createCLAHE(clipLimit=1.0, tileGridSize=(8, 8))
         return clahe.apply(_img)
     else:
         raise Exception(f'Method {method} unknown. Available methods: auto and clahe.')
@@ -372,8 +386,10 @@ def get_intersection_point(line_1: np.ndarray, line_2: np.ndarray):
 
     return np.linalg.solve(a, b).astype(int)
 
-def auto_algin(img: np.ndarray):
+
+def auto_align(img: np.ndarray):
     pass
+
 
 def get_line_params(line: np.ndarray):
     if len(line) == 0:
@@ -387,7 +403,7 @@ def get_line_params(line: np.ndarray):
 
 
 def get_slope(start: Point, end: Point):
-    return divide_by_zero(start.y - end.y , start.x - end.x)
+    return (start.y - end.y) / (start.x - end.x)
 
 
 def get_intercept(slope: float, point: Point):
@@ -395,7 +411,8 @@ def get_intercept(slope: float, point: Point):
 
 
 def plot_isolated_particle(img_arr: np.ndarray,
-                           params: dict):
+                           params: dict,
+                           annotate: bool = True):
     _img_arr = copy.deepcopy(img_arr)
 
     points = get_region_of_interest(_img_arr, params)
@@ -404,16 +421,22 @@ def plot_isolated_particle(img_arr: np.ndarray,
 
     # _img_arr = cv2.Canny(_img_arr, 20, 300)
     plt.imshow(_img_arr, cmap='gray')
+
+    if annotate:
+        alpha = CapillaryStressBalance.calc_alpha(params["arr_1"][1],
+                                                  params["arr_2"][1])
+        plt.text(10, 50, f"alpha: {alpha}")
+
     plt.show()
 
 
-def save_and_apply_particle_isolation(img_paths: List[str],
+def save_and_apply_particle_isolation(img_list: List[Union[str, np.ndarray]],
                                       params: dict,
                                       save: bool = False,
                                       save_dir: Union[str, Path, None] = None,
                                       contrast_method='auto'):
-    _imgs = []
-
+    img_list = []
+    _img = None
     if save:
         if save_dir is None:
             save_dir = Path(os.getcwd()) / 'dataset' / 'processed' / strftime("%Y%m%d")
@@ -423,8 +446,15 @@ def save_and_apply_particle_isolation(img_paths: List[str],
 
         save_dir.mkdir(parents=True, exist_ok=True)
 
-    for img in img_paths:
-        _img = cv2.imread(img, cv2.IMREAD_GRAYSCALE)
+    for img in imgs:
+        if isinstance(img, np.ndarray):
+            _img = img
+        elif isinstance(img, str):
+            _img = cv2.imread(str(img), cv2.IMREAD_GRAYSCALE)
+        # if _img is not None:
+        #     t_dim = _img.shape
+        # else:
+        #     t_dim = (400, 400)
         points = get_region_of_interest(_img, params)
         _img = isolate_particle(_img, points)
         _img = apply_contrast(_img)
@@ -433,23 +463,36 @@ def save_and_apply_particle_isolation(img_paths: List[str],
             fp = save_dir / Path(img).parts[-1]
             cv2.imwrite(fp, _img)
 
-        _imgs.append(_img)
+        img_list.append(_img)
+
+    return img_list
 
 
-def preprocess_sequence(img_paths: List[str]) -> dict:
+def get_sequence_params(img_list: List[Union[str, np.ndarray, Path]]) -> dict:
     """
     Get relevant parameters from a sequence of images. The sequence should be
     a list of image paths taken within one experiment.
 
+    :param imgs:
     :param img_paths:
     :return: a dictionary containing the (mean) parameters to be used to isolate the capillary
+
+    Parameters
+    ----------
+    img_list
     """
 
     cap_structs = []
 
-    for img_path in img_paths:
-        _img = cv2.imread(str(img_path), cv2.IMREAD_GRAYSCALE)
-        _, cap_struct = preprocess_lines(_img, show_original=True, debug=False)
+    for img in img_list:
+        if isinstance(img, np.ndarray):
+            _img = img
+        elif isinstance(img, (Path, str)):
+            _img = cv2.imread(str(img), cv2.IMREAD_GRAYSCALE)
+        else:
+            raise Exception('Invalid file type')
+
+        _, cap_struct = preprocess_lines(_img, show_original=True)
         if cap_struct is not None:
             cap_structs.append(cap_struct)
 
@@ -465,8 +508,8 @@ if __name__ == "__main__":
     imgs = get_image_paths_from_dir(img_path)
 
     # sample_img = img_path / '006.png'
-    t_img_paths = imgs[-6:]
-    mean_params = preprocess_sequence(t_img_paths)
+    t_img_paths = imgs[:6]
+    mean_params = get_sequence_params(t_img_paths)
     # save_and_apply_particle_isolation(t_img_paths, mean_params, save=True)
 
     # fig, ax = plt.subplots(3, 3, figsize=(8, 6))

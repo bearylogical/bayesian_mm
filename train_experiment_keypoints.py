@@ -12,7 +12,7 @@ from src.models.regression import cnn_regression
 # experiment params
 experiment_name = "Initial Test"
 img_size = (128, 128)
-batch_size=10
+batch_size=5
 epochs = 10
 
 # dirs
@@ -37,13 +37,13 @@ img_regress = model(num_target=14, img_size=img_size)
 img_regress.build(input_shape=(None, *img_size, 1))
 
 img_regress.call(model_input)
-
+img_regress.summary()
 # define optimizer
-initial_learning_rate = 0.001
-optimizer = Adam(learning_rate=initial_learning_rate)
-
-img_regress.compile(optimizer=optimizer, loss='mse')
-img_regress.fit(train_data, batch_size=batch_size, validation_data=test_data, epochs=epochs)
+# initial_learning_rate = 0.001
+# optimizer = Adam(learning_rate=initial_learning_rate)
+#
+# img_regress.compile(optimizer=optimizer, loss='mse')
+# img_regress.fit(train_data, batch_size=batch_size, validation_data=test_data, epochs=epochs)
 
 
 # pass training parameters

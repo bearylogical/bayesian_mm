@@ -1,5 +1,4 @@
-from dataclasses import dataclass
-from typing import List, Union
+from typing import List, Union, Tuple
 from copy import deepcopy
 
 import numpy as np
@@ -7,68 +6,15 @@ import numpy as np
 from src.utils.constants import PRESSURE_CONSTANT_MULTIPLIER, BULK_MODULUS
 import matplotlib.pyplot as plt
 
+from src.utils.geometry import Point, Line, CapillaryPoints, get_intersection, dist_2D, get_tip_distances
 from src.utils.transforms import divide_by_zero
 
 
-@dataclass
-class Point:
-    """
-    Dataclass to store point coordinates (cartesian).
-    """
-
-    x: Union[int, None]
-    y: Union[int, None]
+# TODO: Unit tests
 
 
-@dataclass
-class CapillaryPoints:
-    """
-    Points denoting a capillary object
-
-    """
-
-    p0: Point
-    p1: Point
-    p2: Point
-    p3: Point
-    p4: Point
-    p5: Point
-    p6: Point
-
-    def calc_distances(self) -> dict:
-        """
-        Calculates the distances between each point and p0
-        Returns
-        -------
-        Distances : A dictionary with d1...d6 as keys and
-        the cartesian distance as its value.
-        """
-        distances = {}
-        distances["d1"] = dist_2D(self.p1, self.p0)
-        distances["d2"] = dist_2D(self.p2, self.p0)
-        distances["d3"] = dist_2D(self.p3, self.p0)
-        distances["d4"] = dist_2D(self.p4, self.p0)
-        distances["d5"] = dist_2D(self.p5, self.p0)
-        distances["d6"] = dist_2D(self.p6, self.p0)
-
-        assert len(distances) == 6
-        return distances
-
-
-def dist_2D(p1: Point, p2: Point):
-    """
-
-    Parameters
-    ----------
-    p1 - Point object
-    p2 - Point object
-
-    Returns
-    -------
-    A value that reflects the distance between p1 and p2.
-
-    """
-    return ((p2.x - p1.x) ** 2 + (p2.y - p1.y) ** 2) ** 0.5
+def _normalize(coords, ref_idx=0):
+    return coords - coords[:, ref_idx][:, np.newaxis]
 
 
 class CapillaryStressBalance:
@@ -114,12 +60,13 @@ class CapillaryStressBalance:
         self.r_ref = None
 
     def load_data(
-        self,
-        coord_fp: str,
-        pressure_fp: str,
-        coord_format="imagej",
-        normalize: bool = True,
-        pressure_col_idx: int = 1,
+            self,
+            coord_fp: str = None,
+            pressure_fp: str = None,
+            coord_format="imagej",
+            normalize: bool = True,
+            pressure_col_idx: int = 1,
+            img_size: tuple = None
     ):
         """
         Parameters
@@ -136,7 +83,6 @@ class CapillaryStressBalance:
         -------
 
         """
-        coord_dtype = int
 
         if coord_format == "imagej":
             with open(coord_fp) as f:
@@ -152,8 +98,8 @@ class CapillaryStressBalance:
         self.num_images = len(coord_data) // self.num_points_per_image
 
         self.pressures = (
-            np.loadtxt(pressure_fp, skiprows=1, dtype="f4", usecols=pressure_col_idx)
-            * PRESSURE_CONSTANT_MULTIPLIER
+                np.loadtxt(pressure_fp, skiprows=1, dtype="f4", usecols=pressure_col_idx)
+                * PRESSURE_CONSTANT_MULTIPLIER
         )
 
         if self.num_images != len(self.pressures):
@@ -168,67 +114,59 @@ class CapillaryStressBalance:
         self.y_coords = coord_data["y"].reshape(-1, self.num_points_per_image)
 
         if normalize:
-            self.x_coords = self._normalize(self.x_coords)
-            self.y_coords = self._normalize(self.y_coords)
+            self.x_coords = _normalize(self.x_coords)
+            self.y_coords = _normalize(self.y_coords)
 
         # self.capillary_points = [CapillaryPoints()]
+        return self.x_coords, self.y_coords
 
-    def _normalize(self, coords, ref_idx=0):
-        return coords - coords[:, ref_idx][:, np.newaxis]
+    def get_capillary_geometry(self, x_coords, y_coords):
 
-    def calculate(self):
-        # hold our private vars
-
-        # calibration of top and bottom lines
-        # get line fit from x1, x2, polyfit returns _increasing_ degree (different from matlab)
-        # a = slope, b = intercept
-        a_top, b_top = self._get_line_fits(
-            self.x_coords[:, 1:3].flatten(), self.y_coords[:, 1:3].flatten()
+        top_line = self.get_line_param(
+            x_coords[:, 1:3].flatten(), y_coords[:, 1:3].flatten()
         )
         # get line fit from x3, x4
-        a_bot, b_bot = self._get_line_fits(
-            self.x_coords[:, 3:5].flatten(), self.y_coords[:, 3:5].flatten()
+        bot_line = self.get_line_param(
+            x_coords[:, 3:5].flatten(), y_coords[:, 3:5].flatten()
         )
 
-        # get contact angle,
-        self.alpha = self.calc_alpha(b_top, b_bot)
-
         # middle lines
-        b_mid = np.divide(b_bot + b_top, 2)
-        a_mid = np.divide(a_bot + a_top, 2)
+        mid_intercept = np.divide(bot_line.intercept + top_line.intercept, 2)
+        grad_intercept = np.divide(bot_line.grad + top_line.grad, 2)
+        middle_line = Line(grad=grad_intercept, intercept=mid_intercept)
 
-        # intersection between top and bottom (from matlab)
-        p_intersect = Point(None, None)
-        p_intersect.x = np.divide(a_bot - a_top, b_top - b_bot)
-        p_intersect.y = a_top + p_intersect.x * b_top
+        intersect = get_intersection(top_line, bot_line)
+        alpha = self.calc_alpha(top_line, bot_line)
 
-        capillary_points = self._get_capillary_points(self.x_coords, self.y_coords)
+        return top_line, bot_line, middle_line, intersect, alpha
 
-        for cap in capillary_points:
-            cap.p1 = self.projection(a_top, b_top, cap.p1)
-            cap.p2 = self.projection(a_top, b_top, cap.p2)
-            cap.p3 = self.projection(a_bot, b_bot, cap.p3)
-            cap.p4 = self.projection(a_bot, b_bot, cap.p4)
-            cap.p5 = self.projection(a_mid, b_mid, cap.p5)
-            cap.p6 = self.projection(a_mid, b_mid, cap.p6)
+    def process_particle_points(self, x_coords, y_coords) -> Tuple[List[CapillaryPoints], List[CapillaryPoints], float]:
+        # hold our private vars
+        top_line, bot_line, mid_line, intersect, alpha = self.get_capillary_geometry(x_coords, y_coords)
+        capillaries = self.get_capillary_points(x_coords, y_coords)
+
+        for idx, cap in enumerate(capillaries):
+            projections = [None, top_line, top_line, bot_line, bot_line, mid_line, mid_line]
+            capillaries[idx] = cap.project_points_to_lines(projections)
 
         # middle line projection
+        mid_capillaries = deepcopy(capillaries)
 
-        mid_point_capillary_points = deepcopy(capillary_points)
+        for idx, mid_cap in enumerate(mid_capillaries):
+            mid_cap.p0 = Point(0, 0)
+            projections = [mid_line] * len(mid_cap)
+            mid_capillaries[idx] = mid_cap.project_points_to_lines(projections)
 
-        for mid_caps in mid_point_capillary_points:
-            mid_caps.p0 = self.projection(a_mid, b_mid, Point(0, 0))
-            mid_caps.p1 = self.projection(a_mid, b_mid, mid_caps.p1)
-            mid_caps.p2 = self.projection(a_mid, b_mid, mid_caps.p2)
-            mid_caps.p3 = self.projection(a_mid, b_mid, mid_caps.p3)
-            mid_caps.p4 = self.projection(a_mid, b_mid, mid_caps.p4)
-            mid_caps.p5 = self.projection(a_mid, b_mid, mid_caps.p5)
-            mid_caps.p6 = self.projection(a_mid, b_mid, mid_caps.p6)
+        assert len(capillaries) == len(mid_capillaries)
 
-        assert len(capillary_points) == len(mid_point_capillary_points)
+        return capillaries, mid_capillaries, alpha
 
-        tip_distances = self._calc_tip_distances(mid_point_capillary_points)
-        assert len(tip_distances) == len(mid_point_capillary_points)
+    def calculate(self):
+
+        capillaries, mid_capillaries, alpha = self.process_particle_points(self.x_coords, self.y_coords)
+
+        tip_distances = get_tip_distances(mid_capillaries)
+        assert len(tip_distances) == len(mid_capillaries)
         # get distances for each image and append to list.
 
         self.l_bands = np.zeros(self.num_images)
@@ -241,15 +179,15 @@ class CapillaryStressBalance:
         self.wall_min_pressures = np.zeros(self.num_images)
         self.avg_pressures = np.zeros(self.num_images)
 
-        for idx in range(len(capillary_points)):
+        for idx in range(len(capillaries)):
             tip_distance = tip_distances[idx]
             _d_band_front = (tip_distance["d1"] + tip_distance["d3"]) / 2
             _d_band_back = (tip_distance["d2"] + tip_distance["d4"]) / 2
             l_band = _d_band_back - _d_band_front
             self.l_bands[idx] = l_band
 
-            cp, mcp = capillary_points[idx], mid_point_capillary_points[idx]
-            w_band = (dist_2D(cp.p1, cp.p2) + dist_2D(cp.p3, cp.p4)) / 2 # avg slant length
+            cp, mcp = capillaries[idx], mid_capillaries[idx]
+            w_band = (dist_2D(cp.p1, cp.p2) + dist_2D(cp.p3, cp.p4)) / 2  # avg slant length
 
             r_band_front = (dist_2D(cp.p1, mcp.p1) + dist_2D(cp.p3, mcp.p3)) / 2
             r_band_back = (dist_2D(cp.p2, mcp.p2) + dist_2D(cp.p4, mcp.p4)) / 2
@@ -284,7 +222,7 @@ class CapillaryStressBalance:
             self.areas[idx] = area
 
             p_wall, p_avg, p_wall_min_p = self.calc_pressures(
-                self.pressures[idx], self.alpha, r_band_back, a_band
+                self.pressures[idx], alpha, r_band_back, a_band
             )
 
             self.wall_pressures[idx] = p_wall
@@ -314,7 +252,7 @@ class CapillaryStressBalance:
             wall, average and pressure difference values
         """
         f_p = pressure * (
-            np.pi * r_band_back ** 2
+                np.pi * r_band_back ** 2
         )  # force onto back portion of particle by pressure
         f_wall = f_p / np.sin(alpha)
         p_wall = f_wall / a_band
@@ -370,45 +308,26 @@ class CapillaryStressBalance:
         # poisson_ratio = length_strain_2 / 4 / eps_r_2
         # G_div_K = 3 * (1- poisson_ratio) / (2 + 2 * poisson_ratio)
 
-    def _calc_tip_distances(self, capillary_points: List[CapillaryPoints]):
-        return [mid_caps.calc_distances() for mid_caps in capillary_points]
-
     @staticmethod
-    def projection(a, b, p: Point) -> Point:
-        c_temp = (1 + b ** 2) ** 0.5
-        x_perp = -b / c_temp
-        y_perp = 1 / c_temp
-        x = np.divide(p.y - a - (y_perp / x_perp) * p.x, b - y_perp / x_perp)
-        y = a + b * x
-
-        return Point(x, y)
-
-    @staticmethod
-    def _get_capillary_points(x_coords, y_coords) -> List[CapillaryPoints]:
+    def get_capillary_points(x_coords, y_coords) -> List[CapillaryPoints]:
         capillary_points = []
-        for x, y in zip(x_coords, y_coords):
-            p0 = Point(x[0], y[0])
-            p1 = Point(x[1], y[1])
-            p2 = Point(x[2], y[2])
-            p3 = Point(x[3], y[3])
-            p4 = Point(x[4], y[4])
-            p5 = Point(x[5], y[5])
-            p6 = Point(x[6], y[6])
-            capillary_points.append(CapillaryPoints(p0, p1, p2, p3, p4, p5, p6))
+        for c_x, c_y in zip(x_coords, y_coords):
+            points = [Point(_x, _y) for _x, _y in zip(c_x, c_y)]
+            capillary_points.append(CapillaryPoints(*points))
 
         return capillary_points
 
     @staticmethod
-    def calc_alpha(b_top_from_fit, b_bott_from_fit):
-        return np.abs(b_top_from_fit - b_bott_from_fit) / 2
+    def calc_alpha(top_line: Line, bot_line: Line):
+        return np.abs(top_line.grad - bot_line.grad) / 2
 
     @staticmethod
-    def _get_line_fits(x_coords, y_coords) -> list:
-        # note, coeffients are presented in increasing degree
-        # so returns (slope, intercept)
-        return np.polynomial.Polynomial.fit(
+    def get_line_param(x_coords, y_coords) -> Line:
+        # polyfit returns _increasing_ degree (different from matlab)
+
+        return Line(*np.polynomial.Polynomial.fit(
             x_coords, y_coords, 1, domain=[0, 1], window=[0, 1]
-        ).coef.tolist()
+        ).coef.tolist())
 
     def plot_figures(self):
 
@@ -417,10 +336,10 @@ class CapillaryStressBalance:
         assert self.avg_pressures is not None
 
         # shear modulus
-        intercept_G, slope_G = self._get_line_fits(self.eps_g, self.wall_min_pressures)
+        G_line = self.get_line_param(self.eps_g, self.wall_min_pressures)
 
         # compressive modulus
-        intercept_K, slope_K = self._get_line_fits(self.v_strain, self.avg_pressures)
+        K_line = self.get_line_param(self.v_strain, self.avg_pressures)
 
         fig, [ax_G, ax_K] = plt.subplots(nrows=1, ncols=2, figsize=(8, 4))
         ax_G.scatter(self.eps_g, self.wall_min_pressures)
@@ -429,12 +348,12 @@ class CapillaryStressBalance:
         ax_G.set_ylabel("Minimum wall pressure")
         ax_G.plot(
             self.eps_g,
-            intercept_G + slope_G * self.eps_g,
+            G_line(self.eps_g),
             label="Best Fit Line",
             linestyle="--",
         )
         ax_G.set_title(
-            "Fit of Shear Modulus,\n" + r"G $\approx$" + f"{int(slope_G)} Pa"
+            "Fit of Shear Modulus,\n" + r"G $\approx$" + f"{int(G_line.grad)} Pa"
         )
         ax_G.legend()
         # ax_G.set_aspect(1)
@@ -444,16 +363,14 @@ class CapillaryStressBalance:
         ax_K.set_ylabel("Average Pressure")
         ax_K.plot(
             self.v_strain,
-            intercept_K + slope_K * self.v_strain,
+            K_line(self.v_strain),
             label="Best Fit Line",
             linestyle="--",
         )
         ax_K.set_title(
-            "Fit of Compressive Modulus,\n" + r"K $\approx$" + f"{int(slope_K)} Pa"
+            "Fit of Compressive Modulus,\n" + r"K $\approx$" + f"{int(K_line.grad)} Pa"
         )
         ax_K.legend()
-        # ax_K.set_aspect(1)
-
         plt.tight_layout()
         plt.show()
 
@@ -514,8 +431,8 @@ def calc_V(r1, r2, b1, b2, l_band):
 if __name__ == "__main__":
     sb = CapillaryStressBalance()
     sb.load_data(
-        coord_fp="dataset/test_inc_pressure/Inc_press_1_f.txt",
-        pressure_fp="dataset/test_inc_pressure/Pressure_mm_H20_dummy.txt",
+        coord_fp="dataset/sample/sample_annotated_data.txt",
+        pressure_fp="dataset/sample/sample_pressures.txt",
     )
     sb.calculate()
     sb.plot_figures()
