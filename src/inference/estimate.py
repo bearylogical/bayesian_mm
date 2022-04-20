@@ -17,9 +17,9 @@ import matplotlib.pyplot as plt
 import corner
 
 isotropic = IsotropicModel(noise=1,
-                           G=stats.norm(loc=11, scale=5),
-                           K=stats.norm(loc=6, scale=5),
-                           p_factor=stats.norm(loc=1.5, scale=.5))
+                           G=stats.lognorm(s=.8, loc=0, scale=.2),
+                           K=stats.lognorm(s=1, loc=0.5, scale=.1),
+                           p_factor=stats.uniform(loc=1.5, scale=.5))
 
 isotropic_2 = IsotropicModel(noise=1,
                              G=stats.norm(loc=1.1e4, scale=5e3),
