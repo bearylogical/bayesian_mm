@@ -72,7 +72,7 @@ def evaluate(model: Model, test_loader: KeyPointDataLoader):
     return loss, highest_losses, hardest_examples, true_labels, predictions, hardest_k_names
 
 
-def get_hardest_k_examples(model,
+def get_hardest_k_examples(model: Model,
                            test_loader: KeyPointDataLoader, k=10):
     # losses = np.zeros(len(test_loader))
 
