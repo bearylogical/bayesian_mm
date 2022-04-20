@@ -78,7 +78,28 @@ def plot_corner(sampler: emcee.EnsembleSampler,
     return flat_samples
 
 
-def run_experiment(model, num_synthetic, custom_experiment_name=None):
+def generate_data(initial_bands: np.ndarray, model: IsotropicModel, n_points: int = 10, m_observations: int = 1,
+                  **kwargs):
+    if len(initial_bands) != 2:
+        raise Exception('Band must only be of dim 2')
+
+    G, K, p_factor = kwargs.get("G"), kwargs.get("K"), kwargs.get("p_factor")
+    pressures = np.linspace(1e3, 3e4, n_points) / kwargs.get("length_scale", 1e3)
+    pressures = np.expand_dims(pressures, 1)
+    # define our inputs
+    initial_bands = np.expand_dims(initial_bands, 0)
+    # initial_bands_noise = initial_bands + np.array([1e-2, 1e-2]) * np.random.randn(2).T
+    initial_bands = np.repeat(initial_bands, n_points, axis=0)
+    x = np.append(initial_bands, pressures, axis=1)
+    x_experiments = np.repeat(x, m_observations, axis=0)
+
+    y_true = model.predict([G, K, p_factor], x_experiments)
+    y_experiments = y_true + np.array([1e-3, 1e-3]) * np.random.randn(2, n_points * m_observations).T
+
+    return x_experiments, y_true, y_experiments
+
+
+def run_experiment(model, num_obs, num_experiment, custom_experiment_name=None):
     rl_0 = np.array([117.9, 313.0])
     img_size = (2880, 2048)
     n_rl_0 = normalise_bands(rl_0, img_size=img_size)
@@ -94,9 +115,8 @@ def run_experiment(model, num_synthetic, custom_experiment_name=None):
     logger.info('Generating Data')
     x, y, y_noise = generate_data(n_rl_0, model, num_obs=num_obs, m_observations=num_experiment, **material_params)
 
-    y = isotropic.predict([true_G, true_K, true_p_factor], x)
-    y_noise = y + np.array([1e-3, 1e-3]) * np.random.randn(2, num_synthetic).T
-
+    plot_r_l_scatter(y_noise, m_observations=num_experiment)
+    plot_g_k_bands(x, y_noise, material_params["p_factor"], m_observations=num_experiment)
 
     logger.info('Starting Sampling')
     N_walkers = 100
@@ -127,12 +147,13 @@ def run_experiment(model, num_synthetic, custom_experiment_name=None):
 def main():
     model = isotropic
     custom_experiment_name = "Increasing data"
+    num_obs, num_experiments = 10, 3
 
-    N_data = [1, 5, 10, 30]
-    data = []
-    for N in N_data:
-        data.append(run_experiment(model, N, custom_experiment_name))
-
+    run_experiment(model, num_obs, num_experiments)
+    # N_data = [1, 5, 10, 30]
+    # data = []
+    # for N in N_data:
+    #     data.append(run_experiment(model, N, custom_experiment_name))
 
 
 if __name__ == "__main__":
