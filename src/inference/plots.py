@@ -19,6 +19,21 @@ default_capillary_kwargs = dict(img_size=(600, 400),
                                 taper_cutoff=200, is_deg=False,
                                 fill_alpha_inner=0.8, fill_alpha_outer=0)
 
+rng = np.random.default_rng(42)
+
+
+def get_samples(sampler: emcee.EnsembleSampler,
+                model: BayesModel) -> np.ndarray:
+    acts = sampler.get_autocorr_time()
+    for param_name, act in zip(model.param_names, acts):
+        logger.info('auto-correlation ({}): {}'.format(param_name, act))
+
+    # burn-in and thinning
+    act_max = int(np.max(acts))
+    flat_samples = sampler.get_chain(discard=2 * act_max, thin=act_max // 2, flat=True)
+
+    return flat_samples
+
 
 def get_eps(inputs, rl_obs):
     r_obs, l_obs = rl_obs[:, 0], rl_obs[:, 1]
@@ -183,7 +198,7 @@ def plot_samples(inputs: np.ndarray,
     temp_image = Image.new(mode="L", size=cap_object.dim, color=255)
     cap_object.generate_image(temp_image, is_annotate=False)
     num_rows_samples = len(predicted_l_r_bands)
-    rand_idxs = np.random.choice(num_rows_samples, size=num_samples, replace=False)
+    rand_idxs = rng.choice(num_rows_samples, size=num_samples, replace=False)
     for idx, sample in enumerate(predicted_l_r_bands[rand_idxs, :]):
         try:
             _x_coords, _y_coords = get_outline(sample.flatten()[1], sample.flatten()[0], cap_object)
@@ -211,7 +226,7 @@ def plot_chain_obs(inputs: np.ndarray,
                    figsize=(20, 12)):
     nrow = num_show // 3 if num_show % 3 == 0 else num_show // 3 + 1
     num_rows_samples = len(inputs)
-    rand_idxs = np.random.choice(num_rows_samples, size=num_show, replace=False)
+    rand_idxs = rng.choice(num_rows_samples, size=num_show, replace=False)
     fig, axes = plt.subplots(ncols=3, nrows=nrow, figsize=figsize)
     for idx, (r_input, r_obs) in enumerate(zip(inputs[rand_idxs], obs[rand_idxs])):
         plot_samples(r_input, r_obs, flat_chain, alpha=alpha, ax=axes.flat[idx], model=model)
@@ -275,13 +290,7 @@ def plot_corner(sampler: emcee.EnsembleSampler,
                 model: BayesModel,
                 truths: list = None,
                 save_path: Path = None):
-    acts = sampler.get_autocorr_time()
-    for param_name, act in zip(model.param_names, acts):
-        logger.info('auto-correlation ({}): {}'.format(param_name, act))
-
-    # burn-in and thinning
-    act_max = int(np.max(acts))
-    flat_samples = sampler.get_chain(discard=2 * act_max, thin=act_max // 2, flat=True)
+    flat_samples = get_samples(sampler, model)
     bins = 20
     nsamples = flat_samples.shape[0]
 
@@ -299,7 +308,6 @@ def plot_corner(sampler: emcee.EnsembleSampler,
         plt.savefig(save_path / 'cornerplot.png')
 
     plt.show()
-    return flat_samples
 
 
 def plot_g_k_uncertainty(params: list,
@@ -318,7 +326,7 @@ def plot_g_k_uncertainty(params: list,
     mean_g = get_line_param(2 * (eps_r - eps_z), del_p)
     mean_k = get_line_param(2 * eps_r + eps_z, p_avg)
 
-    rand_idxs = np.random.choice(len(flat_chain), size=num_samples, replace=False)
+    rand_idxs = rng.choice(len(flat_chain), size=num_samples, replace=False)
     flat_chain = flat_chain[rand_idxs, :]
 
     _x_G = np.linspace(0, 2, 10)
