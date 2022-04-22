@@ -202,6 +202,16 @@ class SegmentDataLoader(BaseDataLoader):
         return x, y
 
 
+def modify_json_dict_from_keypoints(json_dict:dict, keypoints_list:Union[list, np.ndarray], num_targets)->dict:
+    points = [f"p{p}" for p in range(num_targets // 2)]
+    for idx, kp in enumerate(points):
+        try:
+            json_dict["keypoints"][kp]["x"] = keypoints_list[idx * 2]
+            json_dict["keypoints"][kp]["y"] = keypoints_list[idx * 2 + 1]
+        except KeyError:
+            print(json_dict["file_name"])
+        return json_dict
+
 def get_keypoints_from_json(json_dict: dict, num_targets) -> list:
     """
     Gets keypoints from dictionary of JSON object to return a list.
