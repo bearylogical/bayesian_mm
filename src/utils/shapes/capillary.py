@@ -10,8 +10,8 @@ import numpy as np
 from albumentations.augmentations.bbox_utils import \
     convert_bbox_to_albumentations
 from PIL import Image, ImageDraw
-from skimage.draw import circle_perimeter, line
-from src.utils.shapes.shapes import ImageGenerator, get_scale_factor
+from skimage.draw import circle_perimeter, line, polygon_perimeter
+from src.utils.shapes.shapes import ImageGenerator, get_scale_factor, get_bezier_parameters
 from src.utils.utilities import get_PIL_version
 from tqdm import tqdm
 
@@ -389,8 +389,8 @@ class CapillaryImage:
         b2_xf, b2_yf = b2_cx[b2_mask], b2_ry[b2_mask]
 
         # some transformations to generate the taper cutoff
-        if (self.taper_cutoff < (self.taper_dist + x_r)) | (self.taper_cutoff > b1_x2):
-            self.taper_cutoff = self.taper_dist + x_r
+        # if (self.taper_cutoff < (self.taper_dist + x_r)) | (self.taper_cutoff > b1_x2):
+        #     self.taper_cutoff = self.taper_dist + x_r
 
         ind_f = x_l1 >= self.taper_cutoff
         y_l1, x_l1 = y_l1[ind_f], x_l1[ind_f]
@@ -399,12 +399,12 @@ class CapillaryImage:
         # points for taper cutoff curvature
         b3_x1 = x_l1[0]
         b3_y1 = y_l1[0]
-        b3_x2 = b3_x1 - self.capillary_close_depth
-        b3_y2 = y_r
+        # b3_x2 = b3_x1 - self.capillary_close_depth
+        # b3_y2 = y_r
         b3_x3 = x_l1[0]
         b3_y3 = y_l2[0]
-        b3_x = [b3_x1, b3_x2, b3_x3]
-        b3_y = [b3_y1, b3_y2, b3_y3]
+        b3_x = [b3_x1, b3_x3]
+        b3_y = [b3_y1, b3_y3]
         # generate bezier fit
         # b3_p = get_bezier_parameters(b3_x, b3_y, degree=2)
         b3_xf, b3_yf = b3_x, b3_y
@@ -421,6 +421,13 @@ class CapillaryImage:
         y_v = np.concatenate([b1_yf, y_L1_v, b2_yf, y_L2_v])
 
         x_v, y_v = sort_xy(x_v, y_v)
+        y_v, x_v = polygon_perimeter(y_v, x_v)
+
+        ind_taper_cut = x_v >= self.taper_cutoff
+        x_v = x_v[ind_taper_cut]
+        y_v = y_v[ind_taper_cut]
+
+
 
         r1 = b1_y2 - b1_y1
         r2 = b2_y2 - b2_y1
@@ -517,7 +524,7 @@ class CapillaryImage:
                 tuple(xy) for xy in np.ravel(coords_b3, "F").reshape(-1, 2).tolist()
             ]
         else:
-            coords_b3 = list(np.ravel(coords_L2, "F"))
+            coords_b3 = list(np.ravel(coords_b3, "F"))
 
         # draw.line(list(np.ravel(coords_EL, 'F')), fill=1, width=1, joint='curve')
         draw.line(
@@ -533,7 +540,6 @@ class CapillaryImage:
         draw.line(
             coords_b3,
             fill=self.fill_line,
-            joint="curve",
             width=self.capillary_line_width,
         )
 
@@ -634,7 +640,6 @@ class CapillaryImageGenerator(ImageGenerator):
         res_T2 = np.zeros(len(selected_params), dtype=T2_dtypes)
 
         for param in tqdm(selected_params):
-
 
             _img_id = uuid.uuid4().hex[:16]
 
@@ -780,7 +785,7 @@ def get_outline(l_band: float, r_band: float, cap_object: CapillaryImage, is_nor
     l_d, v1_c1, r_1, r_2 = map(
         int, decompose_l_r_band(cap_object.theta, l_band, r_band)
     )
-    x_r, y_r = cap_object.yx_r[1], cap_object.dim[1] // 2  # auto centering in the y axis
+    x_r, y_r = map(int, (cap_object.yx_r[1], cap_object.dim[1] // 2))  # auto centering in the y axis
 
     # b1, b2 are the curvatures that define our particle interfaces
     b1_x1 = x_r + v1_c1  # center of circle (x-coord)
@@ -792,7 +797,7 @@ def get_outline(l_band: float, r_band: float, cap_object: CapillaryImage, is_nor
     b1_xf, b1_yf = b1_cx[b1_mask], b1_ry[b1_mask]
 
     # points for b2
-    b2_x1 = b1_x1 + round(l_band)
+    b2_x1 = int(b1_x1 + round(l_band))
     b2_y2 = y_r
     # generate circle coords
     b2_ry, b2_cx = circle_perimeter(b2_y2, b2_x1, r_2)
@@ -804,6 +809,12 @@ def get_outline(l_band: float, r_band: float, cap_object: CapillaryImage, is_nor
     y_v = np.concatenate([b1_yf, b2_yf])
 
     x_v, y_v = sort_xy(x_v, y_v)
+    y_v, x_v = polygon_perimeter(y_v, x_v)
+
+    ind_taper_cut = x_v >= cap_object.taper_cutoff
+    x_v = x_v[ind_taper_cut]
+    y_v = y_v[ind_taper_cut]
+
 
     return x_v, y_v
 
