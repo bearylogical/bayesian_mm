@@ -65,80 +65,6 @@ class BaseDataLoader(Sequence):
         return x
 
 
-class BaseRegressionDataLoader(BaseDataLoader):
-    def __init__(self, batch_size, img_size, input_img_paths, target_paths, num_targets=None, task: str = "T1",
-                 fields=None):
-        super().__init__(batch_size, img_size, input_img_paths, target_paths)
-        self.target_data_path = target_paths
-        self.num_targets = num_targets
-        self.fields = fields
-        self.task = task
-
-        self._check_task()
-
-    def _check_task(self):
-        if self.task not in VALID_TASKS:
-            raise AttributeError(f"Task: {self.task}Not a valid task")
-
-    def _get_target_data(self, batch_input_img_idx, fields):
-        y_data = np.load(self.target_data_path)[self.task]
-        if self.num_targets is None:
-            print('No number of targets supplied, inferring from data source')
-            fields = [name for name in y_data.dtype.names if name != 'idx']
-            print(f'{len(fields)} targets identified.')
-            self.num_targets = len(fields)
-
-        y = np.zeros((self.batch_size, self.num_targets))
-        for i, img_idx in enumerate(batch_input_img_idx):
-            _y = get_target_data_from_idx(y_data, img_idx, fields=fields)
-            if self.scale_img is not None:
-                y[i] = [_ty / self.scale_img for _ty in _y]
-            else:
-                y[i] = _y
-
-        return y
-
-
-class RegressionDataLoaderT1(BaseRegressionDataLoader):
-    def __init__(self, batch_size,
-                 img_size,
-                 input_img_paths,
-                 target_paths,
-                 num_targets=None,
-                 task=None,
-                 fields=None,
-                 normalize: bool = False,
-                 transform: Union[A.Compose, None] = default_aug()):
-        super().__init__(batch_size, img_size, input_img_paths, target_paths, fields, task)
-        self.num_targets = num_targets
-        self.normalize = normalize
-        self.transform = transform
-
-    def __getitem__(self, idx):
-        """Returns tuple (input, target) correspond to batch #idx."""
-        i = idx * self.batch_size
-        batch_input_img_paths = self.input_img_paths[i: i + self.batch_size]
-        batch_input_img_idx = [get_idx_from_img_path(f) for f in batch_input_img_paths]
-
-        x = self._get_input_image_data(batch_input_img_paths)
-        y = self._get_target_data(batch_input_img_idx, fields=self.fields)
-
-        if self.transform is not None:
-            for idx, (_xi, _yi) in enumerate(zip(x, y)):
-                _transformed = self.transform(image=_xi, keypoints=_yi.reshape(7, 2))
-                x[idx] = _transformed['image']
-                y[idx] = np.array(_transformed['keypoints']).flatten()
-
-        if self.normalize:
-            if self.img_size[0] != self.img_size[1]:
-                raise DataLoaderError(f"Image size not equal:"
-                                      f"{self.img_size[0]} "
-                                      f"not equal to {self.img_size[1]}")
-            y = normalize(y, float(self.img_size[0]))
-
-        return x, y
-
-
 class KeyPointDataLoader(BaseDataLoader):
     def __init__(self, batch_size,
                  img_size,
@@ -178,27 +104,6 @@ class KeyPointDataLoader(BaseDataLoader):
         # if self.normalize:
         #     y = normalize_keypoints(y, batch_input_img_labels)
 
-        return x, y
-
-
-class SegmentDataLoader(BaseDataLoader):
-    def __init__(self, batch_size, img_size, input_img_paths, target_paths):
-        super().__init__(batch_size, img_size, input_img_paths, target_paths)
-
-    def __len__(self):
-        return len(self.target_img_paths) // self.batch_size
-
-    def __getitem__(self, idx):
-        """Returns tuple (input, target) correspond to batch #idx."""
-        i = idx * self.batch_size
-        batch_input_img_paths = self.input_img_paths[i: i + self.batch_size]
-        batch_target_img_paths = self.target_img_paths[i: i + self.batch_size]
-        x = self._get_input_image_data(batch_input_img_paths)
-
-        y = np.zeros((self.batch_size,) + self.img_size + (1,), dtype="uint8")
-        for j, path in enumerate(batch_target_img_paths):
-            img = load_img(path, target_size=self.img_size, color_mode="grayscale")
-            y[j] = np.expand_dims(img, 2)
         return x, y
 
 

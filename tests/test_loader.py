@@ -2,7 +2,7 @@ import json
 
 import numpy as np
 
-from src.utils.loader import KeyPointDataLoader, \
+from src.utils.dataloader import KeyPointDataLoader, \
     match_image_to_target, \
     BaseDataLoader, \
     get_idx_from_img_path,\

@@ -5,7 +5,7 @@ from sklearn.model_selection import train_test_split
 from keras import Input
 from tensorflow.keras.optimizers import Adam
 
-from src.utils.loader import KeyPointDataLoader, match_image_to_target
+from src.utils.dataloader import KeyPointDataLoader, match_image_to_target
 from src.models.regression import cnn_regression
 
 

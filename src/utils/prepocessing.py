@@ -503,7 +503,7 @@ def get_sequence_params(img_list: List[Union[str, np.ndarray, Path]]) -> dict:
 
 if __name__ == "__main__":
     img_path = Path('dataset/StyleTransfer')
-    from src.utils.loader import get_image_paths_from_dir
+    from src.utils.dataloader import get_image_paths_from_dir
 
     imgs = get_image_paths_from_dir(img_path)
 

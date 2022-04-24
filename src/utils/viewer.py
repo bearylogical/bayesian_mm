@@ -11,7 +11,7 @@ from PIL import Image, ImageDraw, ImageFont
 import cv2
 import albumentations as A
 import numpy as np
-from src.utils.loader import get_image_paths_from_dir, RegressionDataLoaderT1, get_img_target_data, \
+from src.utils.dataloader import get_image_paths_from_dir, RegressionDataLoaderT1, get_img_target_data, \
     match_image_to_target, get_keypoint_dict_from_ls, KeyPointDataLoader
 from src.utils.utilities import prepare_img_prediction
 from PIL import Image
