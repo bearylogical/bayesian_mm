@@ -3,18 +3,15 @@ from copy import deepcopy
 
 import numpy as np
 
-from src.utils.constants import PRESSURE_CONSTANT_MULTIPLIER, BULK_MODULUS
+from src.processors.imagej import load_imagej_data, normalize_keypoint, load_pressure_data, load_keypoints_pressures
+from src.utils.constants import BULK_MODULUS
 import matplotlib.pyplot as plt
 
 from src.utils.geometry import Point, Line, CapillaryPoints, get_intersection, dist_2D, get_line_param
-from src.utils.transforms import divide_by_zero
+from src.utils.transforms import divide_by_zero, normalise_bands
 
 
 # TODO: Unit tests
-
-
-def _normalize(coords, ref_idx=0):
-    return coords - coords[:, ref_idx][:, np.newaxis]
 
 
 class CapillaryStressBalance:
@@ -23,7 +20,7 @@ class CapillaryStressBalance:
 
     """
 
-    def __init__(self, num_points_per_image: int = 7):
+    def __init__(self, num_points_per_image: int = 7, normalize: bool = True):
         """
         Instance variables for CapillaryStressBalance .
 
@@ -37,6 +34,7 @@ class CapillaryStressBalance:
         self.capillary_points: Union[None, List[CapillaryPoints]] = None
         self.num_images = None
 
+        self.normalize = normalize
         self.num_points_per_image = num_points_per_image
 
         self.l_bands: Union[np.ndarray, None] = None
@@ -63,10 +61,7 @@ class CapillaryStressBalance:
             self,
             coord_fp: str = None,
             pressure_fp: str = None,
-            coord_format="imagej",
-            normalize: bool = True,
-            pressure_col_idx: int = 1,
-            img_size: tuple = None
+            pressure_col_idx: int = 1
     ):
         """
         Parameters
@@ -83,44 +78,20 @@ class CapillaryStressBalance:
         -------
 
         """
+        x_coords, y_coords, pressures = load_keypoints_pressures(coord_fp,
+                                                                 pressure_fp,
+                                                                 self.normalize,
+                                                                 pressure_col_idx,
+                                                                 num_points_per_image=self.num_points_per_image)
 
-        if coord_format == "imagej":
-            with open(coord_fp) as f:
-                header = f.readline().split()
-                coord_dtype = {
-                    "names": tuple(header),
-                    "formats": (("i4",) * len(header)),
-                }
-        else:
-            raise (Exception(f"Format {coord_format} not supported"))
-
-        coord_data = np.loadtxt(coord_fp, skiprows=1, dtype=coord_dtype)
-        self.num_images = len(coord_data) // self.num_points_per_image
-
-        self.pressures = (
-                np.loadtxt(pressure_fp, skiprows=1, dtype="f4", usecols=pressure_col_idx)
-                * PRESSURE_CONSTANT_MULTIPLIER
-        )
-
-        if self.num_images != len(self.pressures):
-            print(
-                "Number of image slices not equal to supplied pressures. Data will be truncated accordingly."
-            )
-            min_slices = min(self.num_images, len(self.pressures))
-            coord_data = coord_data[: (min_slices * self.num_points_per_image)]
-            self.pressures = self.pressures[:min_slices]
-
-        self.x_coords = coord_data["x"].reshape(-1, self.num_points_per_image)
-        self.y_coords = coord_data["y"].reshape(-1, self.num_points_per_image)
-
-        if normalize:
-            self.x_coords = _normalize(self.x_coords)
-            self.y_coords = _normalize(self.y_coords)
-
-        # self.capillary_points = [CapillaryPoints()]
-        return self.x_coords, self.y_coords
+        self.x_coords, self.y_coords, self.pressures = x_coords, y_coords, pressures
+        return x_coords, y_coords, pressures
 
     def get_capillary_geometry(self, x_coords, y_coords):
+
+        if self.normalize:
+            x_coords = normalize_keypoint(x_coords)
+            y_coords = normalize_keypoint(y_coords)
 
         top_line = get_line_param(
             x_coords[:, 1:3].flatten(), y_coords[:, 1:3].flatten()
@@ -137,8 +108,9 @@ class CapillaryStressBalance:
 
         intersect = get_intersection(top_line, bot_line)
         alpha = self.calc_alpha(top_line, bot_line)
+        alpha_v2 = self.calc_alpha_v2(top_line, bot_line)
 
-        return top_line, bot_line, middle_line, intersect, alpha
+        return top_line, bot_line, middle_line, intersect, alpha_v2
 
     def process_particle_points(self, x_coords, y_coords) -> Tuple[List[CapillaryPoints], List[CapillaryPoints], float]:
         # hold our private vars
@@ -207,21 +179,24 @@ class CapillaryStressBalance:
     def get_band_area(self, r_b, r_f, w_band):
         return np.pi * (r_f + r_b) * w_band
 
-    def calculate(self):
+    def calculate(self, x_coords, y_coords, pressures):
 
-        capillaries, mid_capillaries, alpha = self.process_particle_points(self.x_coords, self.y_coords)
-
+        capillaries, mid_capillaries, alpha = self.process_particle_points(x_coords, y_coords)
+        self.alpha = alpha
         # get distances for each image and append to list.
+        num_images = len(capillaries)
+        self.l_bands = np.zeros(num_images)
+        self.r_bands = np.zeros(num_images)
+        self.lengths = np.zeros(num_images)
+        self.volumes = np.zeros(num_images)
+        self.areas = np.zeros(num_images)
 
-        self.l_bands = np.zeros(self.num_images)
-        self.r_bands = np.zeros(self.num_images)
-        self.lengths = np.zeros(self.num_images)
-        self.volumes = np.zeros(self.num_images)
-        self.areas = np.zeros(self.num_images)
+        if self.pressures is None:
+            self.pressures = pressures
 
-        self.wall_pressures = np.zeros(self.num_images)
-        self.wall_min_pressures = np.zeros(self.num_images)
-        self.avg_pressures = np.zeros(self.num_images)
+        self.wall_pressures = np.zeros(num_images)
+        self.wall_min_pressures = np.zeros(num_images)
+        self.avg_pressures = np.zeros(num_images)
 
         for idx in range(len(capillaries)):
             cp, mcp = capillaries[idx], mid_capillaries[idx]
@@ -235,7 +210,7 @@ class CapillaryStressBalance:
             length = dist_2D(mcp.p5, mcp.p6)
 
             p_wall, p_avg, p_wall_min_p = self.calc_pressures(
-                self.pressures[idx], alpha, r_band_back, a_band
+                pressures[idx], alpha, r_band_back, a_band
             )
             self.lengths[idx] = length
             self.r_bands[idx] = r_band
@@ -246,9 +221,11 @@ class CapillaryStressBalance:
             self.wall_min_pressures[idx] = p_wall_min_p
             self.avg_pressures[idx] = p_avg
 
-        self.calc_strains()
+        self._calc_strains(num_images)
 
-    def get_bands(self, x_coords, y_coords) -> list:
+        return self.v_strain, self.eps_g, self.wall_min_pressures, self.avg_pressures
+
+    def get_bands(self, x_coords, y_coords, normalize=True) -> np.ndarray:
         """
         Get bands from keypoints
         Parameters
@@ -260,15 +237,19 @@ class CapillaryStressBalance:
         -------
 
         """
+        if normalize:
+            x_coords = normalize_keypoint(x_coords)
+            y_coords = normalize_keypoint(y_coords)
+
         cp, mcp, alpha = self.process_particle_points(x_coords, y_coords)
-        assert len(x_coords) % 7 == 0 and len(y_coords) % 7 == 0
-        bands = []
-        for i_cp, i_mcp in zip(cp, mcp):
+        # assert len(x_coords) % 7 == 0 and len(y_coords) % 7 == 0
+        bands = np.zeros((len(cp), 2))
+        for idx, (i_cp, i_mcp) in enumerate(zip(cp, mcp)):
             tip_d = i_mcp.calc_distances()
             _, _, r_band = self.get_r_band(i_cp, i_mcp)
             l_band = self.get_l_band(tip_d)
-            bands.append(r_band)
-            bands.append(l_band)
+            bands[idx][0] = r_band
+            bands[idx][1] = l_band
         return bands
 
     @staticmethod
@@ -301,13 +282,11 @@ class CapillaryStressBalance:
 
         return p_wall, p_avg, p_wall_min_p
 
-    def calc_strains(self):
+    def _calc_strains(self, num_images):
         # Area strain : due to relative change in cross sectional area,
 
-        eps_1 = np.zeros(self.num_images)
-        v_strain_1 = np.zeros(
-            self.num_images
-        )  # volumetric strain due to pure compression
+        eps_1 = np.zeros(num_images)
+        v_strain_1 = np.zeros(num_images)  # volumetric strain due to pure compression
         # eps_z = np.zeros(self.num_images)  # strain in the z direction
         # set reference at index 0
 
@@ -354,9 +333,15 @@ class CapillaryStressBalance:
     def calc_alpha(top_line: Line, bot_line: Line):
         return np.abs(top_line.grad - bot_line.grad) / 2
 
+    @staticmethod
+    def calc_alpha_v2(top_line: Line, bot_line: Line):
+        num = top_line.grad - bot_line.grad
+        den = 1 + top_line.grad * bot_line.grad
+        return np.abs(np.arctan(num / den)) / 2
 
+    def plot_g_k(self, x_coords, y_coords, pressures):
 
-    def plot(self):
+        self.calculate(x_coords, y_coords, pressures)
 
         # shear modulus
         G_line = get_line_param(self.eps_g, self.wall_min_pressures)
@@ -453,10 +438,9 @@ def calc_V(r1, r2, b1, b2, l_band):
 
 if __name__ == "__main__":
     sb = CapillaryStressBalance()
-    sb.load_data(
+    x, y, p = sb.load_data(
         coord_fp="dataset/sample/sample_annotated_data.txt",
         pressure_fp="dataset/sample/sample_pressures.txt",
     )
-    sb.calculate()
-    sb.plot()
+    sb.plot_g_k(x, y, p)
     # sb.l_bands, sb.r_bands

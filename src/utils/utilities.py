@@ -1,6 +1,6 @@
 import logging
 from pathlib import Path
-from typing import Union
+from typing import Union, List
 
 import numpy as np
 
@@ -28,7 +28,9 @@ def set_logger():
     return logger
 
 
-def get_format_files(path: Union[str, Path], file_formats=ACCEPTABLE_IMAGE_FORMATS, sort: bool = False):
+def get_format_files(path: Union[str, Path],
+                     file_formats: list = ACCEPTABLE_IMAGE_FORMATS,
+                     sort: bool = False) -> List[Path]:
     """
 
     Parameters

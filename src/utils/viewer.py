@@ -11,9 +11,11 @@ from PIL import Image, ImageDraw, ImageFont
 import cv2
 import albumentations as A
 import numpy as np
-from src.utils.dataloader import get_image_paths_from_dir, RegressionDataLoaderT1, get_img_target_data, \
+
+from src.processors.imagej import load_imagej_data
+from src.utils.dataloader import get_image_paths_from_dir, get_img_target_data, \
     match_image_to_target, get_keypoint_dict_from_ls, KeyPointDataLoader
-from src.utils.utilities import prepare_img_prediction
+from src.utils.utilities import prepare_img_prediction, get_format_files
 from PIL import Image
 from typing import Union, List, Tuple
 import copy
@@ -122,6 +124,15 @@ def _plot_keypoints(ax: plt.Axes,
             label = None
         ax.plot(t_x, t_y, marker_fmt, ms=marker_size, label=label)
         ax.annotate(f'{idx}', (t_x, t_y))
+
+
+def save_image_j_labels(exp_dir: str, coord_file: str, postfix: str = '_kp'):
+    imgs = get_format_files(exp_dir, file_formats=[".tif"], sort=True)
+    x_points, y_points = load_imagej_data(coord_file, normalize=False)
+    for idx, img in enumerate(imgs):
+        _img = cv2.imread(str(img), cv2.IMREAD_GRAYSCALE)
+        _img = show_image_coords(_img, np.array([x_points[idx], y_points[idx]]).T, radius=6, font_size=25)
+        _img.save(img.parent / (img.stem + postfix + img.suffix))
 
 
 def overlay_keypoints(img: PIL.Image.Image,
@@ -244,11 +255,8 @@ def show_image_coords(img: np.ndarray,
     return img
 
 
-def display_augmentations(dataset: Union[RegressionDataLoaderT1, KeyPointDataLoader], batch_idx=0, idx=0, samples=10,
+def display_augmentations(dataset: KeyPointDataLoader, batch_idx=0, idx=0, samples=10,
                           cols=5):
-    if not isinstance(dataset, RegressionDataLoaderT1):
-        raise Exception(f'Incorrect object type of dataset ({type(dataset)})')
-
     dataset_copy = copy.deepcopy(dataset)
 
     rows = samples // cols
@@ -324,21 +332,21 @@ def display_predictions(model: Model,
 
 
 if __name__ == "__main__":
-    img_dir = "dataset/experiments/15Apr"
-    labels_dir = "dataset/experiments/15Apr/labels"
-    # match data and labels
-    imgs, labels = match_image_to_target(img_dir, labels_dir, target_fmt=[".json"])
-    img_path = Path(img_dir) / "8777d5e0-Inc_press_1_seq0023.png"
-    t_img, data = get_img_target_data(Path(img_dir) / "8777d5e0-Inc_press_1_seq0023.png",
-                                      Path(labels_dir) / "8777d5e0-Inc_press_1_seq0023.json")
-
-    t_coords = np.array([v for v in data.values()])
-    # vals = np.array([[ 7.471316, 55.25817 , 31.497335, 51.900547, 43.932575, 49.97762 ,
-    #     31.742086, 63.395126, 42.726536, 65.51687 , 29.972242, 57.527832,
-    #     45.319202, 57.237682]])
-    # vals = np.array(list(get_keypoint_from_ls(t_img.shape, vals[0]).values()))
-    show_image_coords(t_img, t_coords).show()
-
+    # img_dir = "dataset/experiments/15Apr"
+    # labels_dir = "dataset/experiments/15Apr/labels"
+    # # match data and labels
+    # imgs, labels = match_image_to_target(img_dir, labels_dir, target_fmt=[".json"])
+    # img_path = Path(img_dir) / "8777d5e0-Inc_press_1_seq0023.png"
+    # t_img, data = get_img_target_data(Path(img_dir) / "8777d5e0-Inc_press_1_seq0023.png",
+    #                                   Path(labels_dir) / "8777d5e0-Inc_press_1_seq0023.json")
+    #
+    # t_coords = np.array([v for v in data.values()])
+    # # vals = np.array([[ 7.471316, 55.25817 , 31.497335, 51.900547, 43.932575, 49.97762 ,
+    # #     31.742086, 63.395126, 42.726536, 65.51687 , 29.972242, 57.527832,
+    # #     45.319202, 57.237682]])
+    # # vals = np.array(list(get_keypoint_from_ls(t_img.shape, vals[0]).values()))
+    # show_image_coords(t_img, t_coords).show()
+    save_image_j_labels("dataset/Inc_press_2", "dataset/Inc_press_2/Inc_press_2.txt")
     # model_path = "models/Baseline_20220417_1725"
     # img_model = models.load_model(model_path)
     # display_keypoints_prediction(img_model, str(img_path), t_coords)
