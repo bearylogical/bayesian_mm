@@ -10,7 +10,7 @@ def normalize(input_image: np.ndarray, max_val: float = 255.0):
     return input_image
 
 
-def normalize_keypoints(keypoints: np.ndarray, input_label_paths: List[Path]):
+def normalize_label_studio_keypoints(keypoints: np.ndarray, input_label_paths: List[Path]):
     for idx, (k, p) in enumerate(zip(keypoints, input_label_paths)):
         with open(p) as kp_file:
             kp_props = json.load(kp_file)
@@ -39,9 +39,12 @@ def divide_by_zero(num, den):
     return np.divide(num, den, out=np.zeros_like(num), where=(den) != 0)
 
 
-def normalise_bands(bands, img_size):
-    if (len(bands) == 2) and (len(img_size) == 2):
-        r_band, l_band = bands
+def normalise_bands(bands, img_size=(2880, 2048)):
+    if (bands.ndim == 2) and (len(img_size) == 2):
+        r_band, l_band = bands[:, 0], bands[:, 1]
+    elif bands.ndim == 1:
+        r_band, l_band = bands[0], bands[1]
+
     else:
         raise Exception('Wrong length for bands')
 
