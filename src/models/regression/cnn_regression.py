@@ -39,7 +39,7 @@ if __name__ == "__main__":
     imgress.summary()
 
     import random
-    from src.utils.loader import get_image_paths_from_dir, RegressionDataLoader
+    from src.utils.dataloader import get_image_paths_from_dir, RegressionDataLoader
 
     num_train = 800
 

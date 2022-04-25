@@ -4,10 +4,9 @@ from tensorflow.keras.optimizers.schedules import ExponentialDecay
 from tensorflow.keras.callbacks import ModelCheckpoint, EarlyStopping
 from tensorflow.keras.models import load_model as load_keras_model
 from keras import Model
-from src.utils.dataloader import RegressionDataLoaderT1
 from src.models.regression.cnn_regression import ImageRegressionModel
 from wandb.keras import WandbCallback
-from src.utils.experiment import LRLogger
+from src.models.callbacks import LRLogger
 from src.utils.utilities import set_logger
 import wandb
 from pathlib import Path

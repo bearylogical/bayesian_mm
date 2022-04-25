@@ -2,7 +2,7 @@ from keras import Model, models
 from tensorflow.keras.utils import Sequence
 from PIL import Image
 import numpy as np
-from src.utils.loader import KeyPointDataLoader, match_image_to_target, rescale_kps_from_pct
+from src.utils.dataloader import KeyPointDataLoader, match_image_to_target, rescale_kps_from_pct
 import wandb
 from keras.callbacks import Callback
 
