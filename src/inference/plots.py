@@ -1,4 +1,3 @@
-import random
 from copy import deepcopy
 from pathlib import Path
 from typing import Union
@@ -8,10 +7,14 @@ import emcee
 from PIL import Image
 import numpy as np
 from matplotlib import pyplot as plt
+import arviz as az
 
+from src.inference.estimate import get_samples
 from src.inference.models.model import IsotropicModel, BayesModel
+from src.utils.mechanics import CapillaryStressBalance
 from src.utils.shapes.capillary import CapillaryImage, get_outline
 from src.utils.geometry import get_line_param
+
 
 logger = logging.getLogger('bayesian_nn')
 
@@ -20,19 +23,6 @@ default_capillary_kwargs = dict(img_size=(600, 400),
                                 fill_alpha_inner=0.8, fill_alpha_outer=0)
 
 rng = np.random.default_rng(42)
-
-
-def get_samples(sampler: emcee.EnsembleSampler,
-                model: BayesModel) -> np.ndarray:
-    acts = sampler.get_autocorr_time()
-    for param_name, act in zip(model.param_names, acts):
-        logger.info('auto-correlation ({}): {}'.format(param_name, act))
-
-    # burn-in and thinning
-    act_max = int(np.max(acts))
-    flat_samples = sampler.get_chain(discard=2 * act_max, thin=act_max // 2, flat=True)
-
-    return flat_samples
 
 
 def get_eps(inputs, rl_obs):
@@ -194,7 +184,7 @@ def plot_samples(inputs: np.ndarray,
         theta=alpha, l_band=obs[1], r_band=obs[0], img_size=(600, 400),
         taper_cutoff=200, is_deg=False, fill_alpha_inner=0.8, fill_alpha_outer=0)
     predicted_l_r_bands = np.array(
-        [model.predict(sample.tolist(), np.expand_dims(inputs, axis=0)) for sample in flat_chain])
+        [model(sample.tolist(), np.expand_dims(inputs, axis=0)) for sample in flat_chain])
     temp_image = Image.new(mode="L", size=cap_object.dim, color=255)
     cap_object.generate_image(temp_image, is_annotate=False)
     num_rows_samples = len(predicted_l_r_bands)
@@ -209,7 +199,7 @@ def plot_samples(inputs: np.ndarray,
         except ValueError:
             pass
     mle_soln = model.max_likelihood(np.expand_dims(inputs, axis=0), obs)
-    mle_rlbands = model.predict(mle_soln, np.expand_dims(inputs, axis=0))
+    mle_rlbands = model(mle_soln, np.expand_dims(inputs, axis=0))
     _x_coords_mle, _y_coords_mle = get_outline(mle_rlbands.flatten()[1], mle_rlbands.flatten()[0], cap_object)
     ax.plot(_x_coords_mle, _y_coords_mle, alpha=0.5, color='red', label='MLE', ls='--')
     ax.legend()
@@ -253,7 +243,7 @@ def plot_mean_shape(inputs,
     )
     temp_image = Image.new(mode="L", size=observed_cap.dim, color=255)
     observed_cap.generate_image(temp_image, is_annotate=False)
-    _r1, _l1 = model.predict(*flat_chain.mean(axis=0), *inputs[r_idx])
+    _r1, _l1 = model(*flat_chain.mean(axis=0), *inputs[r_idx])
     _x_coords, _y_coords = get_outline(_l1, _r1, observed_cap)
     plt.plot(_x_coords, _y_coords, alpha=0.5, color='blue', label='Mean Predicted')
 
@@ -290,7 +280,7 @@ def plot_corner(sampler: emcee.EnsembleSampler,
                 model: BayesModel,
                 truths: list = None,
                 save_path: Path = None):
-    flat_samples = get_samples(sampler, model)
+    flat_samples, _, _ = get_samples(sampler, model)
     bins = 20
     nsamples = flat_samples.shape[0]
 
@@ -310,7 +300,70 @@ def plot_corner(sampler: emcee.EnsembleSampler,
     plt.show()
 
 
-def plot_g_k_uncertainty(params: list,
+def plot_g_k_uncertainty_obs(obs_x_coord,
+                             obs_y_coord,
+                             inputs,
+                             flat_chain:np.ndarray,
+                             save_path: Path = None, num_samples=300):
+    sb = CapillaryStressBalance(normalize=False)
+    _v_strain, _eps_g, wall_min_p, avg_pressures = sb.calculate(obs_x_coord, obs_y_coord, pressures)
+    g_line = get_line_param(_eps_g, wall_min_p)
+    k_line = get_line_param(_v_strain, avg_pressures)
+    rand_idxs = rng.choice(len(flat_chain), size=num_samples, replace=False)
+    flat_chain = flat_chain[rand_idxs, :]
+
+    _x_G = np.linspace(0, _eps_g, 100)
+    _x_K = np.linspace(0, _v_strain, 100)
+
+    fig, axes = plt.subplots(ncols=2, figsize=(13, 6))
+    exponent = r"$\times 10^2$"
+
+    # plot G from our obs
+    axes.flat[0].scatter(_eps_g, wall_min_p, color='red', label=f'Observed')
+    axes.flat[0].plot(_eps_g, g_line(_eps_g), ls='--', color='red')
+    # plot K from our obs
+    axes.flat[1].scatter(_v_strain, avg_pressures, color='red', label=f'Observed')
+    axes.flat[1].plot(_v_strain, k_line(_v_strain), ls='--', color='red')
+    # plot G and K from our posterior
+
+    samples_G, samples_K = flat_chain[:,0], flat_chain[:,1]
+
+
+    for sample in flat_chain:
+        sample_G, sample_K, sample_K = sample
+        _g_line = get_line_param(_eps_g, wall_min_p)
+        axes.flat[0].plot(_eps_g, _eps_g * sample_G, ls='-', color='blue', alpha=0.01)
+        axes.flat[1].plot(_v_strain, _v_strain * sample_K, ls='-', color='blue', alpha=0.01)
+
+    axes.flat[0].set_xlabel(r'$2(\epsilon_r - \epsilon_z)$')
+    axes.flat[0].set_ylabel(f'Min. wall pressure {exponent} kPa')
+    axes.flat[1].set_xlabel(r'$2\epsilon_r + \epsilon_z$')
+    axes.flat[1].set_ylabel(f'Avg. Pressure {exponent} kPa')
+
+    axes.flat[0].legend()
+    axes.flat[1].legend()
+    #
+
+    if save_path:
+        plt.savefig(save_path / 'uncertainty_g_k_obs.png')
+    plt.show()
+
+def plot_posterior(sampler:emcee.EnsembleSampler,
+                   labels:list,
+                   save_path: Path = None):
+
+    idata = az.from_emcee(sampler, var_names=labels)
+
+    az.plot_posterior(idata, kind='hist')
+
+    if save_path:
+        plt.savefig(save_path / 'posterior_plot.png')
+
+    plt.show()
+
+
+
+def plot_g_k_uncertainty(params,
                          inputs,
                          obs,
                          flat_chain,
