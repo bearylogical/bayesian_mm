@@ -42,13 +42,15 @@ def divide_by_zero(num, den):
 def normalise_bands(bands, img_size=(2880, 2048)):
     if (bands.ndim == 2) and (len(img_size) == 2):
         r_band, l_band = bands[:, 0], bands[:, 1]
+        return np.array([r_band / img_size[1], l_band / img_size[0]]).T
     elif bands.ndim == 1:
         r_band, l_band = bands[0], bands[1]
+        return np.array([r_band / img_size[1], l_band / img_size[0]])
 
     else:
         raise Exception('Wrong length for bands')
 
-    return np.array([r_band / img_size[1], l_band / img_size[0]])
+
 
 
 def downscale_img(fp: Path, target_size: Tuple[int, int] = (300, 300)) -> Image.Image:
