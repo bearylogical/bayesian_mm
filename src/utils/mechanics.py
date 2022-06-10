@@ -435,6 +435,11 @@ def calc_V(r1, r2, b1, b2, l_band):
     vol_cf = np.divide(np.pi * l_band, 3) * (r1 ** 2 + r1 * r2 + r2 ** 2)
     return vol_e1 + vol_e2 + vol_cf
 
+def get_eps_rz_from_eps_gk(eps_gk:np.ndarray):
+    A_inv = 1/3 * np.array([[1 , 1],[-2, 1]])
+    eps = A_inv.dot(eps_gk)  # [er, ez]
+
+    return eps
 
 if __name__ == "__main__":
     sb = CapillaryStressBalance()
