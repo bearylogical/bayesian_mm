@@ -1,5 +1,3 @@
-from typing import Union
-from keras import Model, Input
 from keras.layers import (
     Conv2D,
     Dense,
@@ -44,19 +42,18 @@ class MCHomoskedasticDropoutRegression(BaseKeypointModel):
 
         self.preprocess_resize = Resizing(*img_size, crop_to_aspect_ratio=True)
         self.conv_1 = Conv2D(
-            16,
-            (3, 3),
+            32,3,
             activation="relu",
             input_shape=(*img_size, 1),
             kernel_regularizer=L2(1e-4),
         )
-        self.conv_2 = Conv2D(16, (3, 3), activation="relu", kernel_regularizer=L2(1e-4))
+        self.conv_2 = Conv2D(32, 3, activation="relu", kernel_regularizer=L2(1e-4))
         self.dropout_1 = Dropout(dropout_rate)
-        self.pool_1 = MaxPooling2D((3, 3))
-        self.conv_3 = Conv2D(32, 5, activation="relu", kernel_regularizer=L2(1e-4))
-        self.conv_4 = Conv2D(32, 5, activation="relu", kernel_regularizer=L2(1e-4))
+        self.pool_1 = MaxPooling2D(3)
+        self.conv_3 = Conv2D(16, 5, activation="relu", kernel_regularizer=L2(1e-4))
+        self.conv_4 = Conv2D(16, 5, activation="relu", kernel_regularizer=L2(1e-4))
         self.dropout_2 = Dropout(dropout_rate)
-        self.pool_2 = MaxPooling2D((3, 3))
+        self.pool_2 = MaxPooling2D(3)
         self.flatten_1 = Flatten()
         self.dense3 = Dense(num_target, kernel_regularizer=L2(1e-4))
         self.num_target = num_target
@@ -96,19 +93,18 @@ class MCHeteroskedasticDropoutRegression(BaseKeypointModel):
 
         self.preprocess_resize = Resizing(*img_size, crop_to_aspect_ratio=True)
         self.conv_1 = Conv2D(
-            16,
-            (3, 3),
+            32,3,
             activation="relu",
             input_shape=(*img_size, 1),
             kernel_regularizer=L2(1e-4),
         )
-        self.conv_2 = Conv2D(16, (3, 3), activation="relu", kernel_regularizer=L2(1e-4))
+        self.conv_2 = Conv2D(32, 3, activation="relu", kernel_regularizer=L2(1e-4))
         self.dropout_1 = Dropout(dropout_rate)
-        self.pool_1 = MaxPooling2D((3, 3))
-        self.conv_3 = Conv2D(32, 5, activation="relu", kernel_regularizer=L2(1e-4))
-        self.conv_4 = Conv2D(32, 5, activation="relu", kernel_regularizer=L2(1e-4))
+        self.pool_1 = MaxPooling2D(3)
+        self.conv_3 = Conv2D(16, 5, activation="relu", kernel_regularizer=L2(1e-4))
+        self.conv_4 = Conv2D(16, 5, activation="relu", kernel_regularizer=L2(1e-4))
         self.dropout_2 = Dropout(dropout_rate)
-        self.pool_2 = MaxPooling2D((3, 3))
+        self.pool_2 = MaxPooling2D(3)
         self.flatten_1 = Flatten()
         self.mean = Dense(num_target)
         self.log_var = Dense(num_target)
@@ -166,5 +162,6 @@ def get_uncertainties(
     logvar = np.mean(MC_samples[:, :, num_targets:], axis=0)
     aleatoric_uncertainty = np.exp(logvar).mean(axis=0)
     pred_mean = np.mean(means, axis=0)
-
-    return pred_mean, epistemic_uncertainty, aleatoric_uncertainty
+    pred_var = 
+    
+    return pred_mean, pred_var
