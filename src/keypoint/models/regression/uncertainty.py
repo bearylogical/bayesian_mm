@@ -111,6 +111,7 @@ class MCHeteroskedasticDropoutRegression(BaseKeypointModel):
         self.flatten_1 = Flatten()
         self.mean = Dense(num_target, name="mean")
         self.log_var = Dense(num_target, name="log_var")
+        self.concat = Concatenate(name="output")
         self.num_target = num_target
 
     def call(self, inputs, training=None, mask=None):
@@ -126,8 +127,8 @@ class MCHeteroskedasticDropoutRegression(BaseKeypointModel):
         x = self.flatten_1(x)
         mean = self.mean(x)
         log_var = self.log_var(x)
-        concat_out = Concatenate()([mean, log_var])
-        return concat_out
+        output = self.concat([mean, log_var])
+        return output
 
 
 def get_epistemic_uncertainty(
