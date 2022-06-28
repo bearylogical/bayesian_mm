@@ -31,7 +31,7 @@ class MCHomoskedasticDropoutRegression(BaseKeypointModel):
         img_size: tuple = (224, 224),
         dropout_rate: float = 0.5,
         decay: float = 1.0,
-        batch_size: int = 20,
+        batch_size: int = 80,
         length_scale: int = 100,
     ):
         super().__init__()
@@ -44,27 +44,31 @@ class MCHomoskedasticDropoutRegression(BaseKeypointModel):
 
         self.preprocess_resize = Resizing(*img_size, crop_to_aspect_ratio=True)
         self.conv_1 = Conv2D(
-            32,
+            16,
             (3, 3),
             activation="relu",
             input_shape=(*img_size, 1),
-            kernel_regularizer=L2(self.tau),
+            kernel_regularizer=L2(1e-4),
         )
+        self.conv_2 = Conv2D(16, (3, 3), activation="relu", kernel_regularizer=L2(1e-4))
         self.dropout_1 = Dropout(dropout_rate)
-        self.pool_1 = MaxPooling2D((5, 5))
-        self.conv_2 = Conv2D(16, 3, activation="relu", kernel_regularizer=L2(self.tau))
+        self.pool_1 = MaxPooling2D((3, 3))
+        self.conv_3 = Conv2D(32, 5, activation="relu", kernel_regularizer=L2(1e-4))
+        self.conv_4 = Conv2D(32, 5, activation="relu", kernel_regularizer=L2(1e-4))
         self.dropout_2 = Dropout(dropout_rate)
         self.pool_2 = MaxPooling2D((3, 3))
         self.flatten_1 = Flatten()
-        self.dense3 = Dense(num_target, kernel_regularizer=L2(self.tau))
+        self.dense3 = Dense(num_target, kernel_regularizer=L2(1e-4))
         self.num_target = num_target
 
     def call(self, inputs, training=None, mask=None):
         x = self.preprocess_resize(inputs)
         x = self.conv_1(x)
+        x = self.conv_2(x)
         x = self.dropout_1(x, training=True)
         x = self.pool_1(x)
-        x = self.conv_2(x)
+        x = self.conv_3(x)
+        x = self.conv_4(x)
         x = self.dropout_2(x, training=True)
         x = self.pool_2(x)
         x = self.flatten_1(x)
@@ -92,15 +96,17 @@ class MCHeteroskedasticDropoutRegression(BaseKeypointModel):
 
         self.preprocess_resize = Resizing(*img_size, crop_to_aspect_ratio=True)
         self.conv_1 = Conv2D(
-            32,
+            16,
             (3, 3),
             activation="relu",
             input_shape=(*img_size, 1),
-            kernel_regularizer=L2(self.tau),
+            kernel_regularizer=L2(1e-4),
         )
+        self.conv_2 = Conv2D(16, (3, 3), activation="relu", kernel_regularizer=L2(1e-4))
         self.dropout_1 = Dropout(dropout_rate)
-        self.pool_1 = MaxPooling2D((5, 5))
-        self.conv_2 = Conv2D(16, 3, activation="relu", kernel_regularizer=L2(self.tau))
+        self.pool_1 = MaxPooling2D((3, 3))
+        self.conv_3 = Conv2D(32, 5, activation="relu", kernel_regularizer=L2(1e-4))
+        self.conv_4 = Conv2D(32, 5, activation="relu", kernel_regularizer=L2(1e-4))
         self.dropout_2 = Dropout(dropout_rate)
         self.pool_2 = MaxPooling2D((3, 3))
         self.flatten_1 = Flatten()
@@ -111,9 +117,11 @@ class MCHeteroskedasticDropoutRegression(BaseKeypointModel):
     def call(self, inputs, training=None, mask=None):
         x = self.preprocess_resize(inputs)
         x = self.conv_1(x)
+        x = self.conv_2(x)
         x = self.dropout_1(x, training=True)
         x = self.pool_1(x)
-        x = self.conv_2(x)
+        x = self.conv_3(x)
+        x = self.conv_4(x)
         x = self.dropout_2(x, training=True)
         x = self.pool_2(x)
         x = self.flatten_1(x)
