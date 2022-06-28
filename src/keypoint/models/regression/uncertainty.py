@@ -15,7 +15,7 @@ from src.keypoint.models.regression.cnn_regression import BaseKeypointModel
 from keras import backend as K
 
 
-def heteroscedastic_loss(y_true, y_pred):
+def heteroskedastic_loss(y_true, y_pred):
     mean = y_pred[:, :NUM_TARGETS]
     log_var = y_pred[:, NUM_TARGETS:]
     precision = K.exp(-log_var)
