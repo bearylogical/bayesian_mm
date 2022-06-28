@@ -42,7 +42,8 @@ class MCHomoskedasticDropoutRegression(BaseKeypointModel):
 
         self.preprocess_resize = Resizing(*img_size, crop_to_aspect_ratio=True)
         self.conv_1 = Conv2D(
-            32,3,
+            32,
+            3,
             activation="relu",
             input_shape=(*img_size, 1),
             kernel_regularizer=L2(1e-4),
@@ -93,7 +94,8 @@ class MCHeteroskedasticDropoutRegression(BaseKeypointModel):
 
         self.preprocess_resize = Resizing(*img_size, crop_to_aspect_ratio=True)
         self.conv_1 = Conv2D(
-            32,3,
+            32,
+            3,
             activation="relu",
             input_shape=(*img_size, 1),
             kernel_regularizer=L2(1e-4),
@@ -162,6 +164,6 @@ def get_uncertainties(
     logvar = np.mean(MC_samples[:, :, num_targets:], axis=0)
     aleatoric_uncertainty = np.exp(logvar).mean(axis=0)
     pred_mean = np.mean(means, axis=0)
-    pred_var = 
-    
+    pred_var = epistemic_uncertainty + aleatoric_uncertainty
+
     return pred_mean, pred_var
