@@ -1,3 +1,4 @@
+from unicodedata import name
 from keras.layers import (
     Conv2D,
     Dense,
@@ -108,8 +109,8 @@ class MCHeteroskedasticDropoutRegression(BaseKeypointModel):
         self.dropout_2 = Dropout(dropout_rate)
         self.pool_2 = MaxPooling2D(3)
         self.flatten_1 = Flatten()
-        self.mean = Dense(num_target)
-        self.log_var = Dense(num_target)
+        self.mean = Dense(num_target, name="mean")
+        self.log_var = Dense(num_target, name="log_var")
         self.num_target = num_target
 
     def call(self, inputs, training=None, mask=None):
@@ -125,8 +126,8 @@ class MCHeteroskedasticDropoutRegression(BaseKeypointModel):
         x = self.flatten_1(x)
         mean = self.mean(x)
         log_var = self.log_var(x)
-        out = Concatenate([mean, log_var])
-        return out
+        concat_out = Concatenate()([mean, log_var])
+        return concat_out
 
 
 def get_epistemic_uncertainty(
