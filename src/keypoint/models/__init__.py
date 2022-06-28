@@ -5,7 +5,6 @@ import cv2
 import numpy as np
 from keras.models import load_model, Model
 from keras import layers
-from src.keypoint.models.regression.uncertainty import MCDropoutRegression
 from src.keypoint.utils import rescale_predicted_keypoints
 
 from src.utils.dataloader import normalize
