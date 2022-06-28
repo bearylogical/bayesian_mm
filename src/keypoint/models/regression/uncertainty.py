@@ -8,11 +8,11 @@ from keras.layers import (
     Dropout,
     Concatenate,
 )
+from keras.models import Model
 from keras.regularizers import L2
 import numpy as np
 
 from src.utils.constants import NUM_TARGETS
-from src.keypoint.models.regression.cnn_regression import BaseKeypointModel
 from keras import backend as K
 
 
@@ -23,7 +23,7 @@ def heteroskedastic_loss(y_true, y_pred):
     return K.sum(precision * (y_true - mean) ** 2.0 + log_var, axis=-1)
 
 
-class MCHomoskedasticDropoutRegression(BaseKeypointModel):
+class MCHomoskedasticDropoutRegression(Model):
     def __init__(
         self,
         num_target=NUM_TARGETS,
@@ -75,7 +75,7 @@ class MCHomoskedasticDropoutRegression(BaseKeypointModel):
         return self.dense3(x)
 
 
-class MCHeteroskedasticDropoutRegression(BaseKeypointModel):
+class MCHeteroskedasticDropoutRegression(Model):
     def __init__(
         self,
         num_target=NUM_TARGETS,
