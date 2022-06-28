@@ -11,7 +11,7 @@ import matplotlib as mpl
 from matplotlib.patches import Rectangle
 import tensorflow as tf
 from PIL import Image, ImageDraw, ImageFont
-from cv2 import cv2
+import cv2
 import albumentations as A
 import numpy as np
 
