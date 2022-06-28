@@ -1,3 +1,5 @@
+# Neural network
+NUM_TARGETS = 14
 
 
 # Data Related
@@ -10,3 +12,4 @@ ACCEPTABLE_SEGMENTATION_FORMATS = [".png", ".bmp"]
 # Mechanics
 PRESSURE_CONSTANT_MULTIPLIER = 10
 BULK_MODULUS = 1
+

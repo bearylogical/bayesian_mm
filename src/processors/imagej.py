@@ -55,13 +55,11 @@ def load_imagej_data(coord_fp: str = None,
 
     x_coords = coord_data["x"].reshape(-1, num_points_per_image)
     y_coords = coord_data["y"].reshape(-1, num_points_per_image)
-
-    if normalize:
-        x_coords = normalize_keypoint(x_coords)
-        y_coords = normalize_keypoint(y_coords)
-
     # self.capillary_points = [CapillaryPoints()]
-    return x_coords, y_coords
+    if normalize:
+        return normalize_xy_keypoints(x_coords, y_coords)
+    else:
+        return x_coords, y_coords
 
 
 def load_pressure_data(pressure_fp: str = None, pressure_col_idx: int = 1, ):
@@ -75,3 +73,11 @@ def load_pressure_data(pressure_fp: str = None, pressure_col_idx: int = 1, ):
 
 def normalize_keypoint(coords, ref_idx=0):
     return coords - coords[:, ref_idx][:, np.newaxis]
+
+def normalize_xy_keypoints(x_coords, y_coords, num_points_per_image=7):
+
+    x_coords = normalize_keypoint(x_coords)
+    y_coords = normalize_keypoint(y_coords)
+
+    # self.capillary_points = [CapillaryPoints()]
+    return x_coords, y_coords

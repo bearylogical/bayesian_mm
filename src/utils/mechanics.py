@@ -8,6 +8,7 @@ from src.utils.constants import BULK_MODULUS
 import matplotlib.pyplot as plt
 
 from src.utils.geometry import Point, Line, CapillaryPoints, get_intersection, dist_2D, get_line_param
+from src.utils.shapes.capillary import decompose_l_r_band
 from src.utils.transforms import divide_by_zero, normalise_bands
 
 
@@ -223,13 +224,14 @@ class CapillaryStressBalance:
 
         self._calc_strains(num_images)
 
-        return self.v_strain, self.eps_g, self.wall_min_pressures, self.avg_pressures
+        return self.eps_g, self.v_strain, self.wall_min_pressures, self.avg_pressures
 
     def get_bands(self, x_coords, y_coords, normalize=True) -> np.ndarray:
         """
         Get bands from keypoints
         Parameters
         ----------
+        normalize
         x_coords : list or array of x-coordinate of keypoints
         y_coords : list or array of y-coordinate of keypoints
 
@@ -444,8 +446,11 @@ def get_eps_rz_from_eps_gk(eps_gk:np.ndarray):
 if __name__ == "__main__":
     sb = CapillaryStressBalance()
     x, y, p = sb.load_data(
-        coord_fp="dataset/sample/sample_annotated_data.txt",
-        pressure_fp="dataset/sample/sample_pressures.txt",
+        coord_fp="dataset/Inc_press_2/Inc_press_2.txt",
+        pressure_fp="dataset/Inc_press_2/Pressure_mm_H20_dummy.txt",
     )
     sb.plot_g_k(x, y, p)
+    l, r = sb.get_bands(x, y)
+
+    decompose_l_r_band(sb.alpha, l, r)
     # sb.l_bands, sb.r_bands
