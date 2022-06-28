@@ -115,7 +115,7 @@ def evaluate(model: Model, test_loader: KeyPointDataLoader):
 def get_hardest_k_examples(model: Model, test_loader: KeyPointDataLoader, k=10):
     # losses = np.zeros(len(test_loader))
 
-    predictions = model.predict(test_loader, verbose=0)
+    predictions = model.predict(test_loader, verbose=0)[:, :NUM_TARGETS]
     truths = np.array([test_loader[idx][1][0] for idx in range(len(test_loader))])
     losses = np.linalg.norm(predictions - truths, axis=1)
     argsort_loss = np.argsort(losses)  # indices of sorted losses
