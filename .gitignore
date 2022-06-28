@@ -9,3 +9,8 @@ wandb/
 __pycache__/
 /streamlit_keypoints/
 /models/
+/assets/
+/artifacts/
+/estimation/
+/image_train/
+/node_modules/
