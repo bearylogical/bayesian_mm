@@ -1,4 +1,4 @@
-from unicodedata import name
+from tqdm import tqdm
 from keras.layers import (
     Conv2D,
     Dense,
@@ -16,14 +16,14 @@ from src.utils.constants import NUM_TARGETS
 from keras import backend as K
 
 
-def heteroskedastic_loss(y_true, y_pred):
+def heteroscedastic_loss(y_true, y_pred):
     mean = y_pred[:, :NUM_TARGETS]
     log_var = y_pred[:, NUM_TARGETS:]
     precision = K.exp(-log_var)
     return K.sum(precision * (y_true - mean) ** 2.0 + log_var, axis=-1)
 
 
-class MCHomoskedasticDropoutRegression(Model):
+class MCHomoscedasticDropoutRegression(Model):
     def __init__(
         self,
         num_target=NUM_TARGETS,
@@ -48,14 +48,21 @@ class MCHomoskedasticDropoutRegression(Model):
             activation="relu",
             input_shape=(*img_size, 1),
             kernel_regularizer=L2(1e-4),
+            padding="same",
         )
-        self.conv_2 = Conv2D(32, 3, activation="relu", kernel_regularizer=L2(1e-4))
+        self.conv_2 = Conv2D(
+            32, 3, activation="relu", kernel_regularizer=L2(1e-4), padding="same"
+        )
         self.dropout_1 = Dropout(dropout_rate)
-        self.pool_1 = MaxPooling2D(3)
-        self.conv_3 = Conv2D(16, 5, activation="relu", kernel_regularizer=L2(1e-4))
-        self.conv_4 = Conv2D(16, 5, activation="relu", kernel_regularizer=L2(1e-4))
+        self.pool_1 = MaxPooling2D(3, padding="same")
+        self.conv_3 = Conv2D(
+            16, 5, activation="relu", kernel_regularizer=L2(1e-4), padding="same"
+        )
+        self.conv_4 = Conv2D(
+            16, 5, activation="relu", kernel_regularizer=L2(1e-4), padding="same"
+        )
         self.dropout_2 = Dropout(dropout_rate)
-        self.pool_2 = MaxPooling2D(3)
+        self.pool_2 = MaxPooling2D(3, padding="same")
         self.flatten_1 = Flatten()
         self.dense3 = Dense(num_target, kernel_regularizer=L2(1e-4))
         self.num_target = num_target
@@ -75,7 +82,7 @@ class MCHomoskedasticDropoutRegression(Model):
         return self.dense3(x)
 
 
-class MCHeteroskedasticDropoutRegression(Model):
+class MCHeteroscedasticDropoutRegression(Model):
     def __init__(
         self,
         num_target=NUM_TARGETS,
@@ -100,14 +107,21 @@ class MCHeteroskedasticDropoutRegression(Model):
             activation="relu",
             input_shape=(*img_size, 1),
             kernel_regularizer=L2(1e-4),
+            padding="same",
         )
-        self.conv_2 = Conv2D(32, 3, activation="relu", kernel_regularizer=L2(1e-4))
+        self.conv_2 = Conv2D(
+            32, 3, activation="relu", kernel_regularizer=L2(1e-4), padding="same"
+        )
         self.dropout_1 = Dropout(dropout_rate)
-        self.pool_1 = MaxPooling2D(3)
-        self.conv_3 = Conv2D(16, 5, activation="relu", kernel_regularizer=L2(1e-4))
-        self.conv_4 = Conv2D(16, 5, activation="relu", kernel_regularizer=L2(1e-4))
+        self.pool_1 = MaxPooling2D(3, padding="same")
+        self.conv_3 = Conv2D(
+            16, 5, activation="relu", kernel_regularizer=L2(1e-4), padding="same"
+        )
+        self.conv_4 = Conv2D(
+            16, 5, activation="relu", kernel_regularizer=L2(1e-4), padding="same"
+        )
         self.dropout_2 = Dropout(dropout_rate)
-        self.pool_2 = MaxPooling2D(3)
+        self.pool_2 = MaxPooling2D(3, padding="same")
         self.flatten_1 = Flatten()
         self.mean = Dense(num_target, name="mean")
         self.log_var = Dense(num_target, name="log_var")
@@ -132,7 +146,7 @@ class MCHeteroskedasticDropoutRegression(Model):
 
 
 def get_epistemic_uncertainty(
-    model: MCHomoskedasticDropoutRegression, input_data, num_passes: int = 50,
+    model: MCHomoscedasticDropoutRegression, input_data, num_passes: int = 50,
 ):
     """
     Return predictions with mean and variance
@@ -149,7 +163,7 @@ def get_epistemic_uncertainty(
 
 
 def get_uncertainties(
-    model: MCHeteroskedasticDropoutRegression,
+    model: MCHeteroscedasticDropoutRegression,
     input_data,
     num_passes: int = 50,
     num_targets: int = NUM_TARGETS,
@@ -159,13 +173,13 @@ def get_uncertainties(
     :return:
     """
     MC_samples = np.array(
-        [model.predict(input_data, verbose=0) for _ in range(num_passes)]
+        [model.predict(input_data, verbose=0) for _ in tqdm(num_passes)]
     )
     means = MC_samples[:, :, :num_targets]  # K x N
-    epistemic_uncertainty = np.mean(np.var(means, axis=0), axis=0)
-    logvar = np.mean(MC_samples[:, :, num_targets:], axis=0)
-    aleatoric_uncertainty = np.exp(logvar).mean(axis=0)
+    epistemic_uncertainty = np.mean(np.var(means, axis=0), axis=-1)
+    logvar = np.mean(MC_samples[:, :, num_targets:], axis=-1)
+    aleatoric_uncertainty = np.exp(logvar).mean(axis=-1)  # log variance
     pred_mean = np.mean(means, axis=0)
     pred_var = epistemic_uncertainty + aleatoric_uncertainty
 
-    return pred_mean, pred_var
+    return pred_mean, pred_var, epistemic_uncertainty, aleatoric_uncertainty

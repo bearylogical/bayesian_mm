@@ -5,21 +5,25 @@ from src.utils.constants import NUM_TARGETS
 
 
 class BaseKeypointModel(Model):
+    """Base Model for image regression
+    """
+
     def __init__(self, num_target=NUM_TARGETS, img_size: tuple = (224, 224)):
         """
-        Base Model for image regression
-
+        
         :param num_target: Number of target features as an output 1D vector
         :param img_size: Height x Width of input image.
         """
         super().__init__()
         self.preprocess_resize = Resizing(*img_size, crop_to_aspect_ratio=True)
-        self.conv_1 = Conv2D(32, 3, activation="relu", input_shape=(*img_size, 1))
-        self.conv_2 = Conv2D(32, 3, activation="relu")
-        self.pool_1 = MaxPooling2D(3)
-        self.conv_3 = Conv2D(16, 5, activation="relu")
-        self.conv_4 = Conv2D(16, 5, activation="relu")
-        self.pool_3 = MaxPooling2D(3)
+        self.conv_1 = Conv2D(
+            32, 3, activation="relu", input_shape=(*img_size, 1), padding="same"
+        )
+        self.conv_2 = Conv2D(32, 3, activation="relu", padding="same")
+        self.pool_1 = MaxPooling2D(3, padding="same")
+        self.conv_3 = Conv2D(16, 5, activation="relu", padding="same")
+        self.conv_4 = Conv2D(16, 5, activation="relu", padding="same")
+        self.pool_3 = MaxPooling2D(3, padding="same")
         self.flatten_1 = Flatten()
         self.dense3 = Dense(num_target)
         self.num_target = num_target
