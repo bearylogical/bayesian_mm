@@ -1,5 +1,6 @@
 from typing import Union, List
 import logging
+from tqdm import tqdm
 
 import cv2
 import numpy as np
@@ -32,7 +33,7 @@ class KeypointDetector:
         self.model: Model = None
 
     def load(self, model_path):
-        self.model = load_model(model_path)
+        self.model = load_model(model_path, compile=False)
 
     def _predict(self, img_arr: np.ndarray, img_sizes: List[tuple]):
         predicted_kps = self.model.predict(img_arr)
@@ -46,7 +47,7 @@ class KeypointDetector:
 
     def _check_mc_dropout_model(self):
         # this is not optimal, we should be checking for the model configuration.
-        return True if "mc_dropout_regression" in self.model.name else False
+        return True if "dropout_regression" in self.model.name else False
 
     def predict(
         self, src_imgs: Union[List[np.ndarray], np.ndarray], num_passes: int = None
@@ -72,16 +73,15 @@ class KeypointDetector:
         logger.info("Predicting keypoints")
 
         # check for dropout model
-        if all([num_passes is not None, self._check_mc_dropout_model()]):
+        if all([num_passes is not None, self._check_mc_dropout_model(),]):
             assert num_passes > 0
             logger.info(
                 f"MC Dropout model detected, Running MC dropout for {num_passes} passes"
             )
-            predicted_kps = np.zeros(shape=(num_passes * num_imgs, self.num_target))
-            for idx in range(num_passes):
-                predicted_kps[num_imgs * idx : num_imgs * (idx + 1), :] = self._predict(
-                    img_arr, img_sizes
-                )
+            predicted_kps = np.array(
+                [self._predict(img_arr, img_sizes) for _ in tqdm(range(num_passes))]
+            )
+            return predicted_kps
         else:
             predicted_kps = self._predict(img_arr, img_sizes)
 
