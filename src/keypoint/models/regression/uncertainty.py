@@ -44,22 +44,22 @@ class MCHomoscedasticDropoutRegression(Model):
         self.preprocess_resize = Resizing(*img_size, crop_to_aspect_ratio=True)
         self.conv_1 = Conv2D(
             32,
-            3,
+            7,
             activation="relu",
             input_shape=(*img_size, 1),
             kernel_regularizer=L2(1e-4),
             padding="same",
         )
         self.conv_2 = Conv2D(
-            32, 3, activation="relu", kernel_regularizer=L2(1e-4), padding="same"
+            32, 7, activation="relu", kernel_regularizer=L2(1e-4), padding="same"
         )
         self.dropout_1 = Dropout(dropout_rate)
         self.pool_1 = MaxPooling2D(3, padding="same")
         self.conv_3 = Conv2D(
-            16, 5, activation="relu", kernel_regularizer=L2(1e-4), padding="same"
+            16, 3, activation="relu", kernel_regularizer=L2(1e-4), padding="same"
         )
         self.conv_4 = Conv2D(
-            16, 5, activation="relu", kernel_regularizer=L2(1e-4), padding="same"
+            16, 3, activation="relu", kernel_regularizer=L2(1e-4), padding="same"
         )
         self.dropout_2 = Dropout(dropout_rate)
         self.pool_2 = MaxPooling2D(3, padding="same")
@@ -103,22 +103,22 @@ class MCHeteroscedasticDropoutRegression(Model):
         self.preprocess_resize = Resizing(*img_size, crop_to_aspect_ratio=True)
         self.conv_1 = Conv2D(
             32,
-            3,
+            7,
             activation="relu",
             input_shape=(*img_size, 1),
             kernel_regularizer=L2(1e-4),
             padding="same",
         )
         self.conv_2 = Conv2D(
-            32, 3, activation="relu", kernel_regularizer=L2(1e-4), padding="same"
+            32, 7, activation="relu", kernel_regularizer=L2(1e-4), padding="same"
         )
         self.dropout_1 = Dropout(dropout_rate)
         self.pool_1 = MaxPooling2D(3, padding="same")
         self.conv_3 = Conv2D(
-            16, 5, activation="relu", kernel_regularizer=L2(1e-4), padding="same"
+            16, 3, activation="relu", kernel_regularizer=L2(1e-4), padding="same"
         )
         self.conv_4 = Conv2D(
-            16, 5, activation="relu", kernel_regularizer=L2(1e-4), padding="same"
+            16, 3, activation="relu", kernel_regularizer=L2(1e-4), padding="same"
         )
         self.dropout_2 = Dropout(dropout_rate)
         self.pool_2 = MaxPooling2D(3, padding="same")
