@@ -10,11 +10,27 @@ from tempfile import TemporaryDirectory
 import random
 
 from keras.models import Input
+from src.inference.data import generate_data_v2
 
 from src.keypoint.models.regression.cnn_regression import BaseKeypointModel
 from src.keypoint.models import KeypointDetector
 
 SEED = 42
+
+
+@pytest.fixture
+def mock_data():
+    num_obs = 10
+    num_experiment = 1
+    length_scale = 1e3
+    material_params = {
+        "G": 30000 / length_scale,
+        "K": 30000 / length_scale,
+        "length_scale": length_scale,
+    }
+    return generate_data_v2(
+        num_obs=num_obs, num_experiments=num_experiment, **material_params
+    )
 
 
 @pytest.fixture
