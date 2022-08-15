@@ -5,6 +5,7 @@ import matplotlib.pyplot as plt
 import keras
 import numpy as np
 import cv2
+from src.keypoint.models import KeypointDetector
 from src.keypoint.utils import rescale_predicted_keypoints
 
 from src.utils.dataloader import normalize, rescale_kps_from_pct

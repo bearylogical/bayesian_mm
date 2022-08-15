@@ -8,406 +8,391 @@ from PIL import Image
 import numpy as np
 from matplotlib import pyplot as plt
 import arviz as az
-
-from src.inference.estimate import get_samples
-from src.inference.models.model import IsotropicModel, BayesModel
-from src.utils.mechanics import CapillaryStressBalance
-from src.utils.shapes.capillary import CapillaryImage, get_outline
-from src.utils.geometry import get_line_param
+from matplotlib.patches import Ellipse
+import matplotlib.transforms as transforms
 
 
-logger = logging.getLogger('bayesian_nn')
+# use Latex for the labels in plots
+# plt.rcParams['text.usetex'] = True
+# plt.rcParams.update({'font.size': 22})
 
-default_capillary_kwargs = dict(img_size=(600, 400),
-                                taper_cutoff=200, is_deg=False,
-                                fill_alpha_inner=0.8, fill_alpha_outer=0)
+from src.inference.evaluate import get_psrf
+from src.inference.sampler import BaseSampler, BayesSampler
+
+logger = logging.getLogger("bayesian_nn")
+
+default_capillary_kwargs = dict(
+    img_size=(600, 400),
+    taper_cutoff=200,
+    is_deg=False,
+    fill_alpha_inner=0.8,
+    fill_alpha_outer=0,
+)
 
 rng = np.random.default_rng(42)
 
-
-def get_eps(inputs, rl_obs):
-    r_obs, l_obs = rl_obs[:, 0], rl_obs[:, 1]
-    r_0, l_0, p_0 = inputs[:, 0], inputs[:, 1], inputs[:, 2]
-    eps_r = (r_0 - r_obs) / r_0
-    eps_z = (l_0 - l_obs) / l_0
-    return eps_z, eps_r
+cm = plt.get_cmap("tab20")
 
 
-def plot_r_l_scatter(y_experiments,
-                     m_observations,
-                     save_path: Path = None, ):
-    plt.xlabel(r'$R_{\mathrm{band}}$')
-    plt.ylabel(r'$L_{\mathrm{band}}$')
-    # for idx, (x_i, y_i) in enumerate(zip(y_experiments[:,0], y_experiments[:,1])):
-    #     plt.text(x_i, y_i+0.001, idx)
-    for exp in range(m_observations):
-        plt.scatter(y_experiments[exp::m_observations, 0],
-                    y_experiments[exp::m_observations, 1], color=plt.cm.tab10(exp),
-                    label=f'Experiment {exp + 1}')
-    plt.legend()
-
-    if save_path:
-        plt.savefig(save_path / f'r_l_scatter.png')
-
-    plt.show()
-
-
-def plot_g_k_bands(x, y_experiments, p_factor, m_observations, save_path: Path = None, ):
-    eps_z, eps_r = get_eps(x, y_experiments)
-    p_wall = x[:, 2] * p_factor
-    pressure = x[:, 2]
-    del_p = (p_wall - pressure)
-    p_avg = 1 / 3 * (2 * p_wall + pressure)
-    fig, [ax_G, ax_K] = plt.subplots(nrows=1, ncols=2, figsize=(8, 4))
-    mean_g = get_line_param(2 * (eps_r - eps_z), del_p)
-    mean_k = get_line_param(2 * eps_r + eps_z, p_avg)
-    ax_G.plot(
-        2 * (eps_r - eps_z),
-        mean_g(2 * (eps_r - eps_z)),
-        label=f"Linear fit",
-        linestyle="--",
-        color='black'
-    )
-    ax_K.plot(
-        2 * eps_r + eps_z,
-        mean_k(2 * eps_r + eps_z),
-        label=f"Linear fit",
-        linestyle="--",
-        color='black'
-    )
-    ax_G.set_xlabel(r"2($\epsilon_r - \epsilon_z$)")
-    # ax_G.ticklabel_format(axis='y', style='sci', scilimits=(3,1))
-    ax_G.set_ylabel("Minimum wall pressure")
-    ax_G.set_title(
-        "Fit of Shear Modulus,\n" + r"G $\approx$" + f"{mean_g.grad:.3f} x10^5 Pa"
-    )
-
-    ax_K.set_title(
-        "Fit of Compressive Modulus,\n" + r"K $\approx$" + f"{mean_k.grad:.3f} x10^5 Pa"
-    )
-
-    ax_K.set_xlabel(r"$\epsilon_V$ ")
-    ax_K.set_ylabel("Average Pressure")
-
-    for exp in range(m_observations):
-        _eps_r = eps_r[exp::m_observations]
-        _eps_z = eps_z[exp::m_observations]
-        _del_p = del_p[exp::m_observations]
-        _p_avg = p_avg[exp::m_observations]
-        g_line = get_line_param(2 * (_eps_r - _eps_z), _del_p)
-        k_line = get_line_param(2 * _eps_r + _eps_z, _p_avg)
-
-        ax_G.scatter(2 * (_eps_r - _eps_z), _del_p, color=plt.cm.tab10(exp))
-
-        ax_G.plot(
-            2 * (_eps_r - _eps_z),
-            g_line(2 * (_eps_r - _eps_z)),
-            label=f"Experiment {exp + 1}",
-            linestyle="--",
-            color=plt.cm.tab10(exp)
-        )
-
-        # ax_G.set_aspect(1)
-
-        ax_K.scatter(2 * _eps_r + _eps_z, _p_avg, color=plt.cm.tab10(exp))
-
-        ax_K.plot(
-            2 * _eps_r + _eps_z,
-            k_line(2 * _eps_r + _eps_z),
-            label=f"Experiment {exp + 1}",
-            linestyle="--",
-            color=plt.cm.tab10(exp)
-        )
-    ax_K.legend()
-    ax_G.legend()
-    plt.tight_layout()
-
-    if save_path:
-        plt.savefig(save_path / f'g_k_bands.png')
-
-    plt.show()
-
-
-def plot_capillary_observations(initial_pos: Union[np.ndarray, list],
-                                observed_pos: Union[np.ndarray, list],
-                                alpha: float,
-                                noise_obs=None,
-                                save_path: Path = None,
-                                figsize=(20, 6)):
-    initial = CapillaryImage(
-        theta=alpha, l_band=initial_pos[1], r_band=initial_pos[0], img_size=(600, 400), taper_cutoff=200, is_deg=False,
-        fill_alpha_outer=0
-    )
-    initial_img = Image.new(mode="L", size=initial.dim, color=255)
-    initial.generate_image(initial_img, is_annotate=False)
-    imgs = [initial_img]
-    for pos in observed_pos:
-        observed_cap = CapillaryImage(
-            theta=alpha, l_band=pos[1], r_band=pos[0], img_size=(600, 400), taper_cutoff=200, is_deg=False)
-        obs_image = Image.new(mode="L", size=observed_cap.dim, color=255)
-        observed_cap.generate_image(obs_image, is_annotate=False)
-        t_img = deepcopy(obs_image)
-        imgs.append(t_img)
-
-    nrow = len(imgs) // 3 if len(imgs) % 3 == 0 else len(imgs) // 3 + 1
-    fig, axes = plt.subplots(ncols=3, nrows=nrow, figsize=figsize)
-    for idx, img in enumerate(imgs):
-        if idx == 0:
-            seq_text = "Initial"
-        else:
-            seq_text = f"Sequence No. : {idx}"
-        axes.flat[idx].text(10, 380, seq_text)
-        axes.flat[idx].imshow(img, cmap='gray', aspect='auto')
-        if noise_obs is not None and idx > 0:
-            noise_ob = noise_obs[idx - 1]
-            noisy_obs_outline = get_outline(noise_ob[1], noise_ob[0], initial)
-            axes.flat[idx].plot(noisy_obs_outline[0],
-                                noisy_obs_outline[1],
-                                alpha=0.5, color='red',
-                                label='Noise')
-            axes.flat[idx].legend()
-
-    if save_path:
-        plt.savefig(save_path / f'capillary_obs.png')
-
-    plt.show()
-
-
-def plot_samples(inputs: np.ndarray,
-                 obs: np.ndarray,
-                 flat_chain: np.ndarray,
-                 alpha: float,
-                 model: BayesModel,
-                 ax: plt.Axes = None,
-                 num_samples=500):
-    cap_object = CapillaryImage(
-        theta=alpha, l_band=obs[1], r_band=obs[0], img_size=(600, 400),
-        taper_cutoff=200, is_deg=False, fill_alpha_inner=0.8, fill_alpha_outer=0)
-    predicted_l_r_bands = np.array(
-        [model(sample.tolist(), np.expand_dims(inputs, axis=0)) for sample in flat_chain])
-    temp_image = Image.new(mode="L", size=cap_object.dim, color=255)
-    cap_object.generate_image(temp_image, is_annotate=False)
-    num_rows_samples = len(predicted_l_r_bands)
-    rand_idxs = rng.choice(num_rows_samples, size=num_samples, replace=False)
-    for idx, sample in enumerate(predicted_l_r_bands[rand_idxs, :]):
-        try:
-            _x_coords, _y_coords = get_outline(sample.flatten()[1], sample.flatten()[0], cap_object)
-            if idx == 0:
-                ax.plot(_x_coords, _y_coords, alpha=0.01, color='blue', label='Predicted Shape from Samples')
-            else:
-                ax.plot(_x_coords, _y_coords, alpha=0.01, color='blue')
-        except ValueError:
-            pass
-    mle_soln = model.max_likelihood(np.expand_dims(inputs, axis=0), obs)
-    mle_rlbands = model(mle_soln, np.expand_dims(inputs, axis=0))
-    _x_coords_mle, _y_coords_mle = get_outline(mle_rlbands.flatten()[1], mle_rlbands.flatten()[0], cap_object)
-    ax.plot(_x_coords_mle, _y_coords_mle, alpha=0.5, color='red', label='MLE', ls='--')
-    ax.legend()
-    ax.imshow(temp_image, cmap="gray", aspect="auto")
-
-
-def plot_chain_obs(inputs: np.ndarray,
-                   obs: np.ndarray,
-                   flat_chain: np.ndarray,
-                   alpha: float,
-                   model: BayesModel,
-                   num_show: int = 5,
-                   save_path: Path = None,
-                   figsize=(20, 12)):
-    nrow = num_show // 3 if num_show % 3 == 0 else num_show // 3 + 1
-    num_rows_samples = len(inputs)
-    rand_idxs = rng.choice(num_rows_samples, size=num_show, replace=False)
-    fig, axes = plt.subplots(ncols=3, nrows=nrow, figsize=figsize)
-    for idx, (r_input, r_obs) in enumerate(zip(inputs[rand_idxs], obs[rand_idxs])):
-        plot_samples(r_input, r_obs, flat_chain, alpha=alpha, ax=axes.flat[idx], model=model)
-
-    if save_path:
-        plt.savefig(save_path / 'sample_overlay.png')
-
-    plt.show()
-
-
-def plot_mean_shape(inputs,
-                    obs: np.ndarray,
-                    flat_chain: np.ndarray,
-                    model: IsotropicModel,
-                    alpha: float,
-                    r_idx: int = 1,
-                    save_path: Path = None,
-                    figsize=(10, 6)):
-    plt.figure(figsize=figsize)
-
-    observed_cap = CapillaryImage(
-        theta=alpha, l_band=obs[r_idx, 1], r_band=obs[r_idx, 0], img_size=(600, 400),
-        taper_cutoff=200, is_deg=False, fill_alpha_inner=0.8, fill_alpha_outer=0,
-    )
-    temp_image = Image.new(mode="L", size=observed_cap.dim, color=255)
-    observed_cap.generate_image(temp_image, is_annotate=False)
-    _r1, _l1 = model(*flat_chain.mean(axis=0), *inputs[r_idx])
-    _x_coords, _y_coords = get_outline(_l1, _r1, observed_cap)
-    plt.plot(_x_coords, _y_coords, alpha=0.5, color='blue', label='Mean Predicted')
-
-    plt.imshow(temp_image, cmap="gray", aspect="auto")
-    plt.legend()
-
-    if save_path:
-        plt.savefig(save_path / f'mean_shape_{r_idx}.png')
-
-    plt.show()
-
-
-def plot_trace(sampler: emcee.EnsembleSampler,
-               model: BayesModel,
-               save_path: Path = None):
-    fig, axes = plt.subplots(3, figsize=(10, 7), sharex=True)
-
+def plot_trace(
+    sampler: BaseSampler = None,
+    show_psrf: bool = False,
+    show_chains: bool = False,
+    save_path: Path = None,
+):
     samples = sampler.get_chain()
-    labels = model.param_names
+    n_samples, n_chains, ndims = samples.shape
+    labels = sampler.param_names
 
-    for i in range(model.n_params):
+    _, axes = plt.subplots(ndims, figsize=(10, 7), sharex=True)
+
+    for i in range(ndims):
         ax = axes[i]
-        ax.plot(samples[:, :, i], "k", alpha=0.3)
+        if show_chains:
+            for c in range(n_chains):
+                ax.plot(samples[:, c, i], color=cm(c), alpha=0.3, label=f"Chain {c+1}")
+        else:
+            ax.plot(samples[:, :, i], "k", alpha=0.3)
+        ax.legend(loc="lower right", fontsize=13)
         ax.set_xlim(0, len(samples))
         ax.set_ylabel(labels[i])
         ax.yaxis.set_label_coords(-0.1, 0.5)
+
+    if show_psrf:
+        psrfs = []
+        for i in range(2, n_samples):
+            psrfs.append(get_psrf(sampler, i))
+        for dim in range(ndims):
+            ax = axes[dim]
+            ax2 = ax.twinx()
+            _psrfs = [p[dim] for p in psrfs]
+            ax2.plot(range(2, n_samples), _psrfs, "r--", alpha=0.3, label="PSRF")
+            ax2.set_ylabel("PSRF")
+            ax2.set_ylim(0, 3)
+            ax2.legend(fontsize=15)
+            ax.autoscale(tight=True)
+
     if save_path:
-        plt.savefig(save_path / 'traceplot.png')
+        plt.savefig(save_path / "traceplot.png")
 
     plt.show()
 
 
-def plot_corner(sampler: emcee.EnsembleSampler,
-                model: BayesModel,
-                truths: list = None,
-                save_path: Path = None):
-    flat_samples, _, _ = get_samples(sampler, model)
+def plot_auto_corr(sampler: BaseSampler, save_path: Path = None):
+
+    labels = sampler.param_names
+
+    def autocorr_new(y, c=5.0):
+        f = np.zeros(y.shape[1])
+        for yy in y:
+            f += emcee.autocorr.function_1d(yy)
+        f /= len(y)
+        taus = 2.0 * np.cumsum(f) - 1.0
+        window = emcee.autocorr.auto_window(taus, c)
+        return taus[window]
+
+    N = np.exp(np.linspace(np.log(10), np.log(len(sampler.get_chain())), 20)).astype(
+        int
+    )
+    ndim = 2
+    ests = np.empty(shape=(ndim, len(N)))
+
+    for dim in range(ndim):
+        chain = sampler.get_chain()[:, :, dim].T
+        for i, n in enumerate(N):
+            ests[dim, i] = autocorr_new(chain[:, :n])
+
+    _, axes = plt.subplots(1, figsize=(10, 7), sharex=True)
+
+    # Plot the comparisons
+    for dim in range(ndim):
+        axes.loglog(N, ests[dim], "o-", color=cm(dim), label=labels[dim])
+    ylim = plt.gca().get_ylim()
+    axes.plot(N, N / 50.0, "--k", label=r"$\tau = N/50$")
+    axes.set_ylim(ylim)
+    axes.set_xlabel("Samples")
+    axes.set_ylabel(r"$\tau$ estimates")
+    axes.legend(fontsize=14)
+
+    if save_path:
+        plt.savefig(save_path / "traceplot.png")
+
+
+def plot_confidence_ellipse(means, cov, ax, n_std=1, **kwargs):
+    pearson = cov[0, 1] / np.sqrt(cov[0, 0] * cov[1, 1])
+    # Using a special case to obtain the eigenvalues of this
+    # two-dimensionl dataset.
+    ell_radius_x = np.sqrt(1 + pearson)
+    ell_radius_y = np.sqrt(1 - pearson)
+
+    ellipse = Ellipse(
+        (0, 0),
+        width=ell_radius_x * 2,
+        height=ell_radius_y * 2,
+        edgecolor="red",
+        facecolor="none",
+        **kwargs,
+    )
+    scale_x = np.sqrt(cov[0, 0]) * n_std
+    scale_y = np.sqrt(cov[1, 1]) * n_std
+    mean_x, mean_y = means[0], means[1]
+    transf = (
+        transforms.Affine2D()
+        .rotate_deg(45)
+        .scale(scale_x, scale_y)
+        .translate(mean_x, mean_y)
+    )
+    ellipse.set_transform(transf + ax.transData)
+
+    return ax.add_patch(ellipse)
+
+
+def plot_corner(
+    sampler: BaseSampler = None,
+    truths: list = None,
+    save_path: Path = None,
+    quantiles=[0.16, 0.5, 0.84],
+):
+    assert sampler is not None
+    flat_samples = sampler.get_chain()
     bins = 20
-    nsamples = flat_samples.shape[0]
+    nsamples, _ = flat_samples.shape
 
-    fig = corner.corner(flat_samples, bins=bins, labels=model.param_names, truths=truths)
+    fig = corner.corner(
+        flat_samples,
+        bins=bins,
+        labels=sampler.param_names,
+        truths=truths,
+        quantiles=quantiles,
+        show_titles=True,
+        title_kwargs={"fontsize": 12},
+    )
 
-    for i, dist in enumerate(model.param_dists):
-        ax = fig.axes[i * model.n_params + i]
-        params = np.linspace(*ax.get_xlim(), 100)
-        params_space = params[1] - params[0]
-        space_prob = dist.cdf(params + 0.5 * params_space) - dist.cdf(params - 0.5 * params_space)
-        probs = nsamples * (100 / bins) * space_prob
-        ax.plot(params, probs, 'b--')
+    # loop over the histogram if param_dists exists
+
+    if sampler.param_dists is not None:
+        for i, dist in enumerate(sampler.param_dists):
+            ax = fig.axes[i * sampler.n_params + i]
+            params = np.linspace(*ax.get_xlim(), 100)
+            params_space = params[1] - params[0]
+            space_prob = dist.cdf(params + 0.5 * params_space) - dist.cdf(
+                params - 0.5 * params_space
+            )
+            probs = nsamples * (100 / bins) * space_prob
+            ax.plot(params, probs, "b--")
 
     if save_path:
-        plt.savefig(save_path / 'cornerplot.png')
+        plt.savefig(save_path / "cornerplot.png")
 
     plt.show()
 
 
-def plot_g_k_uncertainty_obs(obs_x_coord,
-                             obs_y_coord,
-                             inputs,
-                             flat_chain:np.ndarray,
-                             save_path: Path = None, num_samples=300):
-    sb = CapillaryStressBalance(normalize=False)
-    _v_strain, _eps_g, wall_min_p, avg_pressures = sb.calculate(obs_x_coord, obs_y_coord, pressures)
-    g_line = get_line_param(_eps_g, wall_min_p)
-    k_line = get_line_param(_v_strain, avg_pressures)
-    rand_idxs = rng.choice(len(flat_chain), size=num_samples, replace=False)
-    flat_chain = flat_chain[rand_idxs, :]
-
-    _x_G = np.linspace(0, _eps_g, 100)
-    _x_K = np.linspace(0, _v_strain, 100)
-
-    fig, axes = plt.subplots(ncols=2, figsize=(13, 6))
-    exponent = r"$\times 10^2$"
-
-    # plot G from our obs
-    axes.flat[0].scatter(_eps_g, wall_min_p, color='red', label=f'Observed')
-    axes.flat[0].plot(_eps_g, g_line(_eps_g), ls='--', color='red')
-    # plot K from our obs
-    axes.flat[1].scatter(_v_strain, avg_pressures, color='red', label=f'Observed')
-    axes.flat[1].plot(_v_strain, k_line(_v_strain), ls='--', color='red')
-    # plot G and K from our posterior
-
-    samples_G, samples_K = flat_chain[:,0], flat_chain[:,1]
-
-
-    for sample in flat_chain:
-        sample_G, sample_K, sample_K = sample
-        _g_line = get_line_param(_eps_g, wall_min_p)
-        axes.flat[0].plot(_eps_g, _eps_g * sample_G, ls='-', color='blue', alpha=0.01)
-        axes.flat[1].plot(_v_strain, _v_strain * sample_K, ls='-', color='blue', alpha=0.01)
-
-    axes.flat[0].set_xlabel(r'$2(\epsilon_r - \epsilon_z)$')
-    axes.flat[0].set_ylabel(f'Min. wall pressure {exponent} kPa')
-    axes.flat[1].set_xlabel(r'$2\epsilon_r + \epsilon_z$')
-    axes.flat[1].set_ylabel(f'Avg. Pressure {exponent} kPa')
-
-    axes.flat[0].legend()
-    axes.flat[1].legend()
-    #
-
-    if save_path:
-        plt.savefig(save_path / 'uncertainty_g_k_obs.png')
-    plt.show()
-
-def plot_posterior(sampler:emcee.EnsembleSampler,
-                   labels:list,
-                   save_path: Path = None):
-
+def plot_posterior(
+    sampler: emcee.EnsembleSampler, labels: list, save_path: Path = None
+):
     idata = az.from_emcee(sampler, var_names=labels)
 
-    az.plot_posterior(idata, kind='hist')
+    az.plot_posterior(idata, kind="hist")
 
     if save_path:
-        plt.savefig(save_path / 'posterior_plot.png')
+        plt.savefig(save_path / "posterior_plot.png")
 
     plt.show()
 
 
+def plot_psrf(sampler: BayesSampler, save_path: Path = None):
+    cm = plt.get_cmap("tab10")
+    labels = sampler.param_names
+    _, axes = plt.subplots(1, figsize=(10, 7), sharex=True)
 
-def plot_g_k_uncertainty(params,
-                         inputs,
-                         obs,
-                         flat_chain,
-                         save_path: Path = None, num_samples=300):
-    true_G, true_K, true_p_factor = params
-    x_rl = inputs[:, :2]
-    fig, axes = plt.subplots(ncols=2, figsize=(13, 6))
-    eps_z, eps_r = get_eps(inputs, obs)
-    p_wall = inputs[:, 2] * true_p_factor
-    pressure = inputs[:, 2]
-    del_p = (p_wall - pressure)
-    p_avg = 1 / 3 * (2 * p_wall + pressure)
-    mean_g = get_line_param(2 * (eps_r - eps_z), del_p)
-    mean_k = get_line_param(2 * eps_r + eps_z, p_avg)
+    n_samples, _, ndims = sampler.get_chain().shape
 
-    rand_idxs = rng.choice(len(flat_chain), size=num_samples, replace=False)
-    flat_chain = flat_chain[rand_idxs, :]
-
-    _x_G = np.linspace(0, 2, 10)
-    _x_K = np.linspace(0, 0.6, 10)
-    exponent = r"$\times 10^2$"
-    axes.flat[0].plot(_x_G, _x_G * true_G, ls='--', color='black', label=f'G = {true_G:.3f}{exponent} kPa')
-    axes.flat[0].legend()
-    axes.flat[1].plot(_x_K, _x_K * true_K, ls='--', color='black', label=f'K = {true_K:.3f}{exponent} kPa')
-    axes.flat[1].legend()
-    # plot G from our obs
-    axes.flat[0].scatter(2 * (eps_r - eps_z), mean_g(2 * (eps_r - eps_z)), color='red', label=f'Observed')
-    # plot K from our obs
-    axes.flat[1].scatter(2 * eps_r + eps_z, mean_k(2 * eps_r + eps_z), color='red', label=f'Observed')
-    # plot G and K from our posterior
-    for sample in flat_chain:
-        sample_G, sample_K = sample[0], sample[1]
-        axes.flat[0].plot(_x_G, _x_G * sample_G, ls='-', color='blue', alpha=0.01)
-        axes.flat[1].plot(_x_K, _x_K * sample_K, ls='-', color='blue', alpha=0.01)
-
-    axes.flat[0].set_xlabel(r'$2(\epsilon_r - \epsilon_z)$')
-    axes.flat[0].set_ylabel(f'Min. wall pressure {exponent} kPa')
-    axes.flat[1].set_xlabel(r'$2\epsilon_r + \epsilon_z$')
-    axes.flat[1].set_ylabel(f'Avg. Pressure {exponent} kPa')
-
-    axes.flat[0].legend()
-    axes.flat[1].legend()
-    #
+    psrfs = []
+    for i in range(2, n_samples):
+        psrfs.append(get_psrf(sampler, i))
+    for dim in range(ndims):
+        _psrfs = [p[dim] for p in psrfs]
+        axes.plot(
+            range(2, n_samples),
+            _psrfs,
+            ls="--",
+            color=cm(dim),
+            alpha=1,
+            label=labels[dim],
+        )
+    axes.axhline(
+        y=1.1, xmin=0, xmax=n_samples, ls="-", color="red", label=r"Target $R_c$"
+    )
+    axes.set_ylabel("PSRF")
+    axes.set_xlabel("Samples")
+    axes.set_ylim(1, 2)
+    axes.set_xlim(0, 10000)
+    axes.legend(fontsize=15)
 
     if save_path:
-        plt.savefig(save_path / 'uncertainty_g_k.png')
+        plt.savefig(save_path / "psrf_plot.png")
+
     plt.show()
+
+
+def plot_acf(sampler: emcee.EnsembleSampler, labels: list, save_path: Path = None):
+    cm = plt.get_cmap("tab10")
+
+    def autocorr_new(y, c=5.0):
+        f = np.zeros(y.shape[1])
+        for yy in y:
+            f += emcee.autocorr.function_1d(yy)
+        f /= len(y)
+        taus = 2.0 * np.cumsum(f) - 1.0
+        window = emcee.autocorr.auto_window(taus, c)
+        return taus[window]
+
+    N = np.exp(np.linspace(np.log(10), np.log(len(sampler.get_chain())), 20)).astype(
+        int
+    )
+    ndim = 2
+    ests = np.empty(shape=(ndim, len(N)))
+
+    for dim in range(ndim):
+        chain = sampler.get_chain()[:, :, dim].T
+        for i, n in enumerate(N):
+            ests[dim, i] = autocorr_new(chain[:, :n])
+    _, axes = plt.subplots(1, figsize=(10, 7), sharex=True)
+
+    # Plot the comparisons
+    for dim in range(ndim):
+        axes.loglog(N, ests[dim], "o-", color=cm(dim), label=labels[dim])
+    ylim = plt.gca().get_ylim()
+    axes.plot(N, N / 50.0, "--k", label=r"$\tau = N/50$")
+    axes.set_ylim(ylim)
+    axes.set_xlabel("Samples")
+    axes.set_ylabel(r"$\tau$ estimates")
+    axes.legend(fontsize=14)
+
+    if save_path:
+        plt.savefig(save_path / "autocorr_1.png")
+
+    plt.show()
+
+
+def compute_sigma_level(trace1, trace2, nbins=20):
+    """From a set of traces, bin by number of standard deviations"""
+    L, xbins, ybins = np.histogram2d(trace1, trace2, nbins)
+    L[L == 0] = 1e-16
+    logL = np.log(L)
+
+    shape = L.shape
+    L = L.ravel()
+
+    # obtain the indices to sort and unsort the flattened array
+    i_sort = np.argsort(L)[::-1]
+    i_unsort = np.argsort(i_sort)
+
+    L_cumsum = L[i_sort].cumsum()
+    L_cumsum /= L_cumsum[-1]
+
+    xbins = 0.5 * (xbins[1:] + xbins[:-1])
+    ybins = 0.5 * (ybins[1:] + ybins[:-1])
+
+    return xbins, ybins, L_cumsum[i_unsort].reshape(shape)
+
+
+def plot_MCMC_trace(ax, trace, scatter=False, **kwargs):
+    """Plot traces and contours"""
+    xbins, ybins, sigma = compute_sigma_level(trace[0], trace[1])
+    ax.contour(xbins, ybins, sigma.T, levels=[0.683, 0.955], **kwargs)
+    if scatter:
+        ax.plot(trace[0], trace[1], ",k", alpha=0.1)
+    ax.set_xlabel(r"G")
+    ax.set_ylabel(r"K")
+
+
+def plot_results(
+    x,
+    y,
+    sampler: BaseSampler,
+    truths: list = None,
+    show_map: bool = True,
+    show_bayesian_ci: bool = True,
+    show_prediction_interval: bool = True,
+    show_mle: bool = True,
+    show_mle_ci: bool = True,
+    titles: list = [
+        r"Plot of $\epsilon_v$ against $\sigma_c$",
+        r"Plot of $\epsilon_s$ against $\sigma_s$",
+    ],
+    xlabels: list = [r"$\epsilon_v$", r"$\epsilon_s$"],
+    ylabels: list = [r"$\sigma_c$ [kPa]", r"$\sigma_s$ [kPa]"],
+):
+
+    # MLE stuff here
+    mle, err = sampler.max_likelihood(x, y)
+    mle_output = sampler.model_fn(mle[:2], x)
+
+    _, axes = plt.subplots(ncols=2, figsize=(20, 8))
+    samples = sampler.get_samples().samples
+    lower_param, upper_param = np.percentile(samples, [2.2, 97.7], axis=0)
+    map_val, lower_bound, upper_bound = sampler.predict(samples, x)
+
+    for idx in range(2):
+        ax = axes.flat[idx]
+        if show_mle:
+            ax.plot(
+                x.T[idx],
+                mle_output.T[idx],
+                "r-",
+                label="Maximum likelihood estimate (MLE)",
+            )
+        if show_mle_ci:
+            ax.plot(
+                x.T[idx],
+                x.T[idx] * (mle[idx] - err[idx] * 2),
+                "k--",
+                label="(MLE) 95\% Confidence Interval",
+            )
+            ax.plot(x.T[idx], x.T[idx] * (mle[idx] + err[idx] * 2), "k--")
+        if truths is not None:
+            ax.plot(
+                x.T[idx],
+                x.T[idx] * truths[idx],
+                "-",
+                color="magenta",
+                label="Ground Truth",
+            )
+        if show_map:
+            ax.plot(
+                x.T[idx],
+                map_val[idx] * x.T[idx],
+                "-",
+                color="blue",
+                label="Maximum a posteriori (MAP)",
+            )
+        if show_bayesian_ci:
+            ax.fill_between(
+                x.T[idx],
+                x.T[idx] * lower_param[idx],
+                x.T[idx] * upper_param[idx],
+                alpha=0.4,
+                color="c",
+                label=r"(Bayesian) 95\% Credible Interval",
+            )
+        if show_prediction_interval:
+            ax.plot(
+                x.T[idx],
+                lower_bound[idx],
+                "--",
+                color="grey",
+                label=r"(Bayesian) 95\% Prediction Interval",
+            )
+            ax.plot(x.T[idx], upper_bound[idx], "--", color="grey")
+
+        # show our data
+        ax.scatter(x.T[idx], y.T[idx])
+        ax.set_title(titles[idx], pad=20)
+        ax.set_xlabel(xlabels[idx])
+        ax.set_ylabel(ylabels[idx])
+        ax.legend(fontsize=12)
+        # axes[0].set_xlim(0, .25)
+        ax.autoscale(tight=True)
+    plt.show()
+    # plt.savefig('assets/overall_1.svg',  bbox_inches='tight')
